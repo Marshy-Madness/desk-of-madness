@@ -4,3 +4,4 @@ import "./gaming";
 import "./workshop";
 import "./deck";
 import "./play";
+import "./trophies";

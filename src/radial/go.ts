@@ -1,7 +1,7 @@
 import { closeNotesPage, isNotesPageShowing, showPage } from "../opening";
 import { getRunningGame } from "../hooks/useAppLifetime";
 import { deskGame, pointDeskAt } from "../state/deskGame";
-import { COMMANDS_ROUTE, lastPlaceAddress, NOTES_ROUTE, parsePlace, RADIAL_ROUTE, WEB_ROUTE } from "../state/place";
+import { ACHIEVEMENTS_ROUTE, COMMANDS_ROUTE, lastPlaceAddress, NOTES_ROUTE, parsePlace, RADIAL_ROUTE, WEB_ROUTE } from "../state/place";
 import { webPath } from "../browser";
 
 // Where the radial menu's slots and the Notes / Desk / Web Browser button combos take you.
@@ -46,6 +46,15 @@ export function goCommands(opts: { view?: CommandsView; q?: string } = {}) {
   showPage(COMMANDS_ROUTE + (query ? `?${query}` : ""));
 }
 
+/** The full achievements page: the library, or one game's list. */
+export function goAchievements(appId?: string | null, view?: "library" | "timeline") {
+  const params = new URLSearchParams();
+  if (appId) params.set("app", appId);
+  if (view) params.set("view", view);
+  const query = params.toString();
+  showPage(ACHIEVEMENTS_ROUTE + (query ? `?${query}` : ""));
+}
+
 /** Opens one note in its game's notes list. */
 export function goNote(appId: string, noteId: string) {
   pointDeskAt(appId);
@@ -76,6 +85,7 @@ export function notesCombo() {
 
 export const deskCombo = () => (isNotesPageShowing() ? closeNotesPage() : goDesk());
 export const webCombo = () => (isNotesPageShowing() ? closeNotesPage() : goWeb());
+export const achievementsCombo = () => (isNotesPageShowing() ? closeNotesPage() : goAchievements());
 export const commandsCombo = () => (isNotesPageShowing() ? closeNotesPage() : goCommands());
 
 // ---- the radial menu ----

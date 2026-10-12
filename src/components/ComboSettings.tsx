@@ -22,6 +22,7 @@ const ACTION_NAMES: Record<ComboAction, string> = {
   open: "Notes",
   desk: "Desk",
   web: "Web Browser",
+  achievements: "Achievements",
   dictate: "Speech to text",
   voice: "Voice command",
 };

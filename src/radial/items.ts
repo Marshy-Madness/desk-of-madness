@@ -9,7 +9,7 @@ export const DEFAULT_ITEMS: RadialItem[] = [{ type: "game" }, { type: "notes" },
 export const MAX_ITEMS = 10;
 
 /** The built-in slots, for the "Add" buttons. */
-export const BUILT_IN: RadialItem[] = [...DEFAULT_ITEMS, { type: "commands" }];
+export const BUILT_IN: RadialItem[] = [...DEFAULT_ITEMS, { type: "commands" }, { type: "achievements" }];
 
 export const radialItems = (s: Settings = getSettings()): RadialItem[] => s.radial?.items ?? DEFAULT_ITEMS;
 
@@ -28,6 +28,8 @@ export function itemLabel(item: RadialItem): string {
       return "Web Browser";
     case "commands":
       return "Commands";
+    case "achievements":
+      return "Achievements";
     case "note":
       return item.title || "Untitled note";
   }
@@ -40,6 +42,7 @@ export const itemDescription = (item: RadialItem): string =>
     desk: "Your Desk of Tomes.",
     web: "The browser, back on the page you had open.",
     commands: "Desk Commands: search, new note, timers, dice, Home Assistant, Docker…",
+    achievements: "Your Steam achievements: library, timeline and each game's list.",
     note: "A note pinned to the wheel.",
   })[item.type];
 

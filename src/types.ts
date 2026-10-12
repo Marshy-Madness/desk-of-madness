@@ -166,7 +166,7 @@ export type OpenChord = "l4r4" | "l5r5" | "l3r3" | "off";
  * What a button combo does: the radial menu, Desk Commands (the command palette), open the notes page ("open"), the Desk, the web browser, speech
  * to text or a voice command. "tomes" is the old name of the radial combo, still read as its fallback.
  */
-export type ComboAction = "radial" | "commands" | "open" | "desk" | "web" | "dictate" | "voice";
+export type ComboAction = "radial" | "commands" | "open" | "desk" | "web" | "achievements" | "dictate" | "voice";
 
 /** One slot on the radial menu. */
 export type RadialItem =
@@ -177,6 +177,8 @@ export type RadialItem =
   | { type: "web"; url?: string }
   /** Desk Commands, the command palette. */
   | { type: "commands" }
+  /** The full achievements page. */
+  | { type: "achievements" }
   /** A note pinned to the wheel (separate from pinning in the notes list). */
   | { type: "note"; appId: string; noteId: string; title: string; gameName?: string };
 

@@ -52,6 +52,7 @@ export const DEFAULT_COMBOS: Record<ComboAction, Button[]> = {
   open: ["L4", "R4"],
   desk: [],
   web: [],
+  achievements: [],
   dictate: ["STEAM", "L5", "R5"],
   voice: ["STEAM", "L4", "R4"],
 };

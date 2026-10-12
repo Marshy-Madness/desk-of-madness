@@ -417,6 +417,7 @@ export const SettingsView: FC = () => {
           </PanelSectionRow>
           <PanelSectionRow>
             <ComboRow action="web" label="Web Browser" description="The browser, on the page you had open last." canTurnOff />
+            <ComboRow action="achievements" label="Achievements" description="Your Steam achievements, full screen." canTurnOff />
           </PanelSectionRow>
           <PanelSectionRow>
             <ButtonsSeen />

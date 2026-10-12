@@ -6,6 +6,7 @@ import { QuickAccessPanel } from "./components/QuickAccessPanel";
 import { SessionSummaryModal } from "./components/SessionSummaryModal";
 import { AttachScreenshotsModal } from "./components/AttachScreenshotsModal";
 import { getRunningGame, startLifetimeTracking } from "./hooks/useAppLifetime";
+import { startAchievementWatch } from "./state/achievements";
 import { startIntegrations } from "./integrations";
 import { emitDataChanged, getSettings, loadSettings } from "./state/notesStore";
 import { addPendingScreenshot, getPendingScreenshots } from "./state/pendingScreenshots";
@@ -60,6 +61,7 @@ export default definePlugin(() => {
     }
   });
   const stopScreenshots = startScreenshotWatch();
+  const stopAchievements = startAchievementWatch();
   const stopIntegrations = startIntegrations();
   const stopScrolls = startScrolls(); // after the integrations: Scrolls hook into them
   // The backend emits this after a sync pulls in edits made on the website.
@@ -77,6 +79,7 @@ export default definePlugin(() => {
     onDismount() {
       stopTracking();
       stopScreenshots();
+      stopAchievements();
       stopScrolls();
       stopIntegrations();
       removeTheme();

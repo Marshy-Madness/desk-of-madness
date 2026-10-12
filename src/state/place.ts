@@ -12,6 +12,8 @@ export const WEB_ROUTE = "/desk-of-madness-web";
 export const RADIAL_ROUTE = "/desk-of-madness-radial";
 /** Desk Commands, the command palette (commands/CommandsPage.tsx). */
 export const COMMANDS_ROUTE = "/desk-of-madness-commands";
+/** The full achievements page (achievements/AchievementsPage.tsx). */
+export const ACHIEVEMENTS_ROUTE = "/desk-of-madness-achievements";
 
 export type Tab = "desk" | "all" | "workshop" | "settings";
 const TABS: Tab[] = ["desk", "all", "workshop", "settings"];
