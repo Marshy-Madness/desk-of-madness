@@ -1,7 +1,7 @@
 import { FC, ReactNode, useEffect, useRef, useState } from "react";
 import { Focusable, GamepadButton, GamepadEvent } from "@decky/ui";
 import { addEventListener, removeEventListener } from "@decky/api";
-import { FaArrowLeft, FaBookOpen, FaGamepad, FaGlobe, FaListUl, FaStickyNote, FaThumbtack } from "react-icons/fa";
+import { FaArrowLeft, FaBolt, FaBookOpen, FaGamepad, FaGlobe, FaListUl, FaStickyNote, FaThumbtack } from "react-icons/fa";
 import { backend } from "../api/backend";
 import { closeNotesPage, setNotesPageMounted } from "../opening";
 import { useRunningGame } from "../hooks/useAppLifetime";
@@ -13,7 +13,7 @@ import { ensureTheme } from "../theme";
 import { useChromeHeights } from "../steamWindow";
 import { Game, GameSummary, RadialItem } from "../types";
 import { itemLabel, radialItems } from "./items";
-import { goDesk, goNote, goNotes, goWeb, takeRadialCombo } from "./go";
+import { goCommands, goDesk, goNote, goNotes, goWeb, takeRadialCombo } from "./go";
 
 // The radial menu: its own page, opened by the radial combo. Aim with the right stick (read from the
 // controller by the backend) or the D-pad, then A (or let go of the combo). The current game's slot opens a
@@ -95,6 +95,8 @@ export const RadialPage: FC = () => {
         return { key, icon: <FaBookOpen />, label: "Desk", run: () => goDesk(gameId) };
       case "web":
         return { key, icon: <FaGlobe />, label: item.url ? host(item.url) : "Web Browser", run: () => goWeb(item.url) };
+      case "commands":
+        return { key, icon: <FaBolt />, label: "Commands", run: () => goCommands() };
       case "note":
         return {
           key,

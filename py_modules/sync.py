@@ -261,6 +261,26 @@ class Sync:
     def unshare(self, share_id: str):
         return self._request("DELETE", f"/api/shares/{_q(share_id)}")
 
+    # Desk Commands: Home Assistant and Docker, through the server (admins only)
+    def controls(self) -> dict:
+        """What the server can control for this account; nothing when there's no server or you're not an admin."""
+        try:
+            return self._request("GET", "/api/controls", timeout=8) or {}
+        except RuntimeError:
+            return {"home": False, "docker": False}
+
+    def home_list(self) -> list:
+        return self._request("GET", "/api/home", timeout=15) or []
+
+    def home_action(self, entity_id: str, action: str) -> dict:
+        return self._request("POST", f"/api/home/{_q(entity_id)}", {"action": action}, timeout=15)
+
+    def docker_list(self) -> list:
+        return self._request("GET", "/api/docker", timeout=15) or []
+
+    def docker_action(self, name: str, action: str) -> dict:
+        return self._request("POST", f"/api/docker/{_q(name)}", {"action": action}, timeout=60)
+
     def _sync_media(self, appid: str, game: dict, state: dict):
         local_dir = storage.media_dir(appid)
         uploaded = set(state["media"].get(appid, []))

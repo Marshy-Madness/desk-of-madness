@@ -18,6 +18,7 @@ import * as s from "./styles";
 
 const ACTION_NAMES: Record<ComboAction, string> = {
   radial: "Radial menu",
+  commands: "Desk Commands",
   open: "Notes",
   desk: "Desk",
   web: "Web Browser",

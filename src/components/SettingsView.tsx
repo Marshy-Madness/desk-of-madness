@@ -405,6 +405,14 @@ export const SettingsView: FC = () => {
             />
           </PanelSectionRow>
           <PanelSectionRow>
+            <ComboRow
+              action="commands"
+              label="Desk Commands"
+              description="The command palette: search notes, new note, voice note, screenshot note, timers, dice, Home Assistant, Docker, or type a command."
+              canTurnOff
+            />
+          </PanelSectionRow>
+          <PanelSectionRow>
             <ComboRow action="desk" label="Desk" description="Your Desk of Tomes, full screen." canTurnOff />
           </PanelSectionRow>
           <PanelSectionRow>

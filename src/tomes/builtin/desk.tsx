@@ -8,6 +8,7 @@ import { editLeftOff } from "../../components/LeftOffCard";
 import { addCounter, counterMenu } from "../../components/Counters";
 import { AttachScreenshotsModal } from "../../components/AttachScreenshotsModal";
 import { openNotesPage } from "../../opening";
+import { goCommands } from "../../radial/go";
 import { getPendingScreenshots } from "../../state/pendingScreenshots";
 import { Counter, Game, Note } from "../../types";
 import { firstLine, formatWhen } from "../../utils/format";
@@ -251,6 +252,7 @@ const QuickActions: FC<TomeProps> = ({ game, fullScreen, goTab }) => {
       </Btn>
       <Btn onClick={() => editLeftOff(game.appId, game.leftOff?.text ?? "")}>📍 Left off</Btn>
       <Btn onClick={() => addCounter(game.appId)}>⚔️ Counter</Btn>
+      <Btn onClick={() => goCommands()}>⚡ Commands</Btn>
       <Btn onClick={() => goTab("workshop")}>🏭 Workshop</Btn>
       {!fullScreen && <Btn onClick={openNotesPage}>⛶ Full screen</Btn>}
     </Buttons>

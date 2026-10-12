@@ -1,5 +1,5 @@
 import { cloneElement, isValidElement } from "react";
-import { deskCombo, notesCombo, radialComboPressed, webCombo } from "./radial/go";
+import { commandsCombo, deskCombo, notesCombo, radialComboPressed, webCombo } from "./radial/go";
 import { RadialPage } from "./radial/RadialPage";
 import { addEventListener, removeEventListener, routerHook } from "@decky/api";
 import { afterPatch, ErrorBoundary, findModuleExport, Patch } from "@decky/ui";
@@ -10,7 +10,9 @@ import { QuickAccessPanel } from "./components/QuickAccessPanel";
 import { getSettings } from "./state/notesStore";
 import { dictationBusy, dictationChordEnabled, stopAnywhereDictation, toggleAnywhereDictation } from "./dictation";
 import { NOTES_ROUTE, WEB_ROUTE, reportButtons } from "./opening";
-import { lastPlaceAddress, RADIAL_ROUTE } from "./state/place";
+import { COMMANDS_ROUTE, lastPlaceAddress, RADIAL_ROUTE } from "./state/place";
+import { CommandsPage } from "./commands/CommandsPage";
+import { stopAllTimers } from "./commands/timers";
 import { releaseTrackpads } from "./trackpads";
 import { Button, feedRecording, getCombo, isRecordingCombo, sortButtons } from "./combos";
 import { speechAllowed } from "./state/speech";
@@ -97,12 +99,13 @@ function findInputService(): InputService | null {
   }
 }
 
-const ACTIONS: ComboAction[] = ["radial", "open", "desk", "web", "dictate", "voice"];
+const ACTIONS: ComboAction[] = ["radial", "commands", "open", "desk", "web", "dictate", "voice"];
 
 function enabledCombos(): { action: ComboAction; buttons: Button[] }[] {
   const s = getSettings();
   const on: Record<ComboAction, boolean> = {
     radial: true,
+    commands: true,
     open: true,
     desk: true,
     web: true,
@@ -118,6 +121,7 @@ function enabledCombos(): { action: ComboAction; buttons: Button[] }[] {
 function runCombo(action: ComboAction) {
   if (action === "open") notesCombo();
   else if (action === "radial") radialComboPressed(getCombo("radial") ?? []);
+  else if (action === "commands") commandsCombo();
   else if (action === "desk") deskCombo();
   else if (action === "web") webCombo();
   else if (action === "dictate") {
@@ -356,6 +360,7 @@ export function startIntegrations(): () => void {
   routerHook.addRoute(NOTES_ROUTE, NotesPage);
   routerHook.addRoute(WEB_ROUTE, BrowserPage, { exact: true });
   routerHook.addRoute(RADIAL_ROUTE, RadialPage, { exact: true });
+  routerHook.addRoute(COMMANDS_ROUTE, CommandsPage, { exact: true });
   const stopChord = startChordWatch();
   const patches = [patchQamTabs()];
   setTabsPatched(!!patches[0]);
@@ -367,6 +372,8 @@ export function startIntegrations(): () => void {
     routerHook.removeRoute(NOTES_ROUTE);
     routerHook.removeRoute(WEB_ROUTE);
     routerHook.removeRoute(RADIAL_ROUTE);
+    routerHook.removeRoute(COMMANDS_ROUTE);
+    stopAllTimers();
     releaseTrackpads();
   };
 }

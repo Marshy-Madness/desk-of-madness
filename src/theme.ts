@@ -26,6 +26,10 @@ ${btn(":hover:enabled")} {
   color: var(--dom-focus-fg, #0e141b) !important;
   box-shadow: 0 0 0 2px #f2f4f7 !important;
 }
+${SCOPES.map((s) => `${s} .dom-cmd.gpfocus`).join(", ")} {
+  background: rgba(26, 159, 255, 0.28) !important;
+  box-shadow: 0 0 0 2px #1a9fff !important;
+}
 ${btn(":disabled")} {
   opacity: 0.45 !important;
 }

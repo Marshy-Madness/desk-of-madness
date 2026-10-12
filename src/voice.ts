@@ -3,6 +3,9 @@ import { backend } from "./api/backend";
 import { comboLabel, getCombo } from "./combos";
 import { getRunningGame, RunningGame } from "./hooks/useAppLifetime";
 import { openNotesPage } from "./opening";
+import { rollDice, rollLabel } from "./commands/dice";
+import { formatDuration, getTimers, parseDuration, startTimer, stopAllTimers } from "./commands/timers";
+import { goCommands } from "./radial/go";
 import { emitDataChanged, getSettings } from "./state/notesStore";
 import { Counter, CounterKind, Game, Note, NoteKind, Recording, Screenshot } from "./types";
 import { errText } from "./utils/errors";
@@ -91,8 +94,11 @@ type Command = {
   exact?: boolean;
   /** Needs a game running (anything that writes notes does). */
   game?: boolean;
-  run: (ctx: Ctx) => Promise<string | void>;
+  /** Return NOT_MINE when the words turn out not to be for this command, so they're treated as a note instead. */
+  run: (ctx: Ctx) => Promise<string | void | typeof NOT_MINE>;
 };
+
+const NOT_MINE = Symbol("not mine");
 
 const SEP = "[\\s,.:;!?\\-]";
 
@@ -116,6 +122,51 @@ function titleFrom(text: string, fallback: string): string {
 }
 
 const capital = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
+/**
+ * "called Nether Portal with coordinates 342, 71, -892" → title "Nether Portal", text "Coordinates 342, 71, -892".
+ * Without "called …", the first words become the title and everything is the text.
+ */
+function titleAndBody(rest: string, fallback: string): { title: string; body: string } {
+  const m = rest.match(/^(?:called|named|titled|title)\s+(.+?)(?:[\s,.:;]+(?:with|saying|that says|which says|containing|body)[\s:]+(.+))?$/is);
+  if (m) return { title: capital(noEndPunct(m[1].replace(/^["“']|["”']$/g, ""))) || fallback, body: capital(tidy(m[2] ?? "")) };
+  return { title: titleFrom(rest, fallback), body: rest };
+}
+
+const compact = (text: string) => simplify(text).replace(/^(the|my) /, "").replace(/\s/g, "");
+
+/** The item named like what was said: the same name, then one containing it, then the most words in common. */
+function findByName<T>(items: T[], name: (t: T) => string, said: string): T | null {
+  const want = compact(said);
+  if (!want) return null;
+  return (
+    items.find((it) => compact(name(it)) === want) ??
+    items.find((it) => compact(name(it)).includes(want)) ??
+    bestMatch(items, name, said.replace(/^\s*(the|my)\s+/i, ""))
+  );
+}
+
+/** Home Assistant through the Desk server; NOT_MINE when it isn't set up or nothing has that name. */
+async function homeCommand(rest: string, action: "turn_on" | "turn_off" | "toggle") {
+  const name = noEndPunct(rest);
+  if (!name) return NOT_MINE;
+  const list = await backend.homeList().catch(() => null);
+  const entity = list && findByName(list, (e) => e.name, name);
+  if (!entity) return NOT_MINE;
+  const after = await backend.homeAction(entity.id, action);
+  if (after.state == null) return `🏠 Ran ${entity.name}`;
+  return `🏠 ${entity.name} is ${after.state.replace(/_/g, " ")}`;
+}
+
+async function dockerCommand(rest: string, action: "start" | "stop" | "restart") {
+  const name = noEndPunct(rest).replace(/\s+container$/i, "");
+  if (!name) return NOT_MINE;
+  const list = await backend.dockerList().catch(() => null);
+  const box = list && findByName(list, (c) => c.name, name);
+  if (!box) return NOT_MINE;
+  const after = await backend.dockerAction(box.name, action);
+  return `🐳 ${box.name}: ${after.state || action + "ed"}`;
+}
 
 function blankNote(fields: Partial<Note>): Note {
   return {
@@ -276,7 +327,7 @@ export const COMMANDS: Command[] = [
     run: async () => {
       toaster.toast({
         title: "🗣 Voice commands",
-        body: "new note … · add … · screenshot … · to do … · done … · tag … · pin · left off … · died · count … · undo. Full list in Settings.",
+        body: "new note … (called … with …) · add … · screenshot … · to do … · done … · left off … · died · count … · roll d20 · timer 5 minutes · turn on … · search … · undo. Full list in Settings.",
         duration: 10000,
       });
     },
@@ -310,6 +361,104 @@ export const COMMANDS: Command[] = [
     run: async () => {
       openNotesPage();
     },
+  },
+  {
+    say: ["open commands", "command palette", "desk commands", "show commands"],
+    usage: "open commands",
+    does: "Opens Desk Commands, the command palette",
+    exact: true,
+    run: async () => {
+      goCommands();
+    },
+  },
+  {
+    say: ["search notes for", "search notes", "search for", "search", "find notes", "find note", "find", "look up"],
+    usage: "search <words>",
+    does: "Searches the notes of every game, in Desk Commands",
+    run: async ({ rest }) => {
+      goCommands({ view: "search", q: noEndPunct(rest) });
+    },
+  },
+  {
+    say: ["flip a coin", "flip coin", "coin flip", "toss a coin", "heads or tails"],
+    usage: "flip a coin",
+    does: "Heads or tails",
+    exact: true,
+    run: async () => rollLabel(rollDice("coin")!),
+  },
+  {
+    say: ["roll the dice", "roll dice", "roll a", "roll an", "roll"],
+    usage: "roll <dice>",
+    does: "Rolls dice: \"roll d20\", \"roll 2d6+3\" (just \"roll\" is a d20)",
+    run: async ({ rest }) => {
+      const r = rollDice(noEndPunct(rest).replace(/\bdie\b|\bdice\b/gi, ""));
+      if (!r) throw new Error(`Couldn't roll "${noEndPunct(rest)}". Try "roll 2d6" or "roll d20".`);
+      return rollLabel(r);
+    },
+  },
+  {
+    say: ["stop timers", "stop timer", "stop the timer", "cancel timers", "cancel timer", "cancel the timer", "clear timers"],
+    usage: "stop timers",
+    does: "Stops every running timer",
+    exact: true,
+    run: async () => {
+      const n = getTimers().length;
+      stopAllTimers();
+      return n ? `⏱ Stopped ${n} timer${n === 1 ? "" : "s"}` : "No timers running";
+    },
+  },
+  {
+    say: ["set a timer for", "set a timer", "set timer for", "set timer", "start a timer for", "start a timer", "start timer for", "start timer", "timer for", "timer"],
+    usage: "timer <time> [for <what>]",
+    does: "Starts a countdown: \"timer 5 minutes\", \"timer 1h 30m for the bread\"",
+    run: async ({ rest }) => {
+      const m = noEndPunct(rest).match(/^(.*?)(?:\s+(?:for|called|named|labelled|labeled)\s+(.+))?$/is);
+      let ms = parseDuration(m?.[1] ?? "");
+      let label = m?.[2] ? capital(m[2]) : "";
+      if (!ms) {
+        ms = parseDuration(rest);
+        label = "";
+      }
+      if (!ms) throw new Error('Say how long, like "timer 5 minutes"');
+      startTimer(ms, label);
+      return `⏱ ${label ? `${label}: ` : ""}${formatDuration(ms)} timer started`;
+    },
+  },
+  {
+    say: ["turn on", "switch on"],
+    usage: "turn on <thing>",
+    does: "Home Assistant: turns a light, switch or fan on (admins, set up on the server)",
+    run: async ({ rest }) => homeCommand(rest, "turn_on"),
+  },
+  {
+    say: ["turn off", "switch off"],
+    usage: "turn off <thing>",
+    does: "Home Assistant: turns it off",
+    run: async ({ rest }) => homeCommand(rest, "turn_off"),
+  },
+  {
+    say: ["toggle", "activate", "run scene", "run script"],
+    usage: "toggle <thing>",
+    does: "Home Assistant: flips it, or runs a scene or script",
+    run: async ({ rest }) => homeCommand(rest, "toggle"),
+  },
+  {
+    say: ["restart container", "restart"],
+    usage: "restart <container>",
+    does: "Docker: restarts a container on the Desk server's machine (admins)",
+    run: async ({ rest }) => dockerCommand(rest, "restart"),
+  },
+  {
+    say: ["start container"],
+    usage: "start container <name>",
+    does: "Docker: starts a stopped container",
+    run: async ({ rest }) => dockerCommand(rest, "start"),
+  },
+  {
+    say: ["stop container"],
+    usage: "stop container <name>",
+    does: "Docker: stops a container",
+    run: async ({ rest }) => dockerCommand(rest, "stop"),
   },
   {
     say: ["add screenshot", "add a screenshot", "attach screenshot", "attach a screenshot", "screenshot to note", "screenshot to last note"],
@@ -406,12 +555,13 @@ export const COMMANDS: Command[] = [
   {
     say: ["new note", "create note", "create a note", "make a note", "make note", "note", "write down", "write"],
     usage: "new note <text>",
-    does: "New note for this game; the first words become its title",
+    does: "New note for this game; the first words become its title (or \"new note called <title> with <text>\")",
     game: true,
     run: async ({ rest, game }) => {
       if (!rest) throw new Error('Say what to write, like "new note the key is under the bridge"');
-      await createNote(game, { title: titleFrom(rest, "Voice note"), body: rest }, "new note");
-      return `📝 New note: ${titleFrom(rest, "Voice note")}`;
+      const { title, body } = titleAndBody(rest, "Voice note");
+      await createNote(game, { title, body }, "new note");
+      return `📝 New note: ${title}`;
     },
   },
   ...KIND_WORDS.map(([kind, words]): Command => ({
@@ -421,8 +571,9 @@ export const COMMANDS: Command[] = [
     game: true,
     run: async ({ rest, game }) => {
       if (!rest) throw new Error(`Say the ${words[0]} too, like "${words[0]} …"`);
-      await createNote(game, { title: titleFrom(rest, capital(words[0])), body: rest, kind }, `${words[0]} note`);
-      return `📝 New ${words[0]}: ${titleFrom(rest, "")}`;
+      const { title, body } = titleAndBody(rest, capital(words[0]));
+      await createNote(game, { title, body, kind }, `${words[0]} note`);
+      return `📝 New ${words[0]}: ${title}`;
     },
   })),
   {
@@ -585,6 +736,14 @@ export async function runCommand(words: string, game: RunningGame | null) {
       break;
     }
   }
+  if (found && (!found.c.game || game)) {
+    const result = await found.c.run({ words, rest: found.rest, game: game! });
+    if (result !== NOT_MINE) {
+      if (result) toaster.toast({ title: "Desk of Madness", body: result, duration: 4000 });
+      return;
+    }
+    found = null; // e.g. "turn on the lever puzzle" with nothing in Home Assistant by that name: it's a note
+  }
   if (!found) {
     const fallback = getSettings().voiceFallback ?? "note";
     if (fallback === "nothing" || !game) {
@@ -601,7 +760,7 @@ export async function runCommand(words: string, game: RunningGame | null) {
     return;
   }
   const result = await found.c.run({ words, rest: found.rest, game: game! });
-  if (result) toaster.toast({ title: "Desk of Madness", body: result, duration: 4000 });
+  if (result && result !== NOT_MINE) toaster.toast({ title: "Desk of Madness", body: result, duration: 4000 });
 }
 
 async function finishMemo() {

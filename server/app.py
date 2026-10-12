@@ -28,6 +28,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import merge
 import reader_cache
 import speech
+import controls
 import steam
 from accounts import OWNER_ID, Accounts, check_password
 
@@ -906,6 +907,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, [{k: t[k] for k in ("id", "label", "createdAt", "lastUsed")} for t in user.get("tokens", [])])
         if p[1:] == ["settings"]:
             return self.send(200, {"webhooks": user.get("webhooks", [])})
+        if len(p) >= 2 and p[1] in ("controls", "home", "docker"):  # Desk Commands: admins only
+            return self.controls(user, p[1:], None)
         if len(p) >= 2 and p[1] == "admin" and accounts.is_admin(user):
             return self.admin_get(user, p[2:])
         return self.send(404, {"error": "not found"})
@@ -1122,8 +1125,30 @@ class Handler(BaseHTTPRequestHandler):
             accounts.get(user["id"])["webhooks"] = hooks
             accounts.save()
             return self.send(200, {"webhooks": hooks})
+        if len(p) >= 3 and p[1] in ("home", "docker"):
+            return self.controls(user, p[1:], self.json_body())
         if len(p) >= 3 and p[:2] == ["api", "admin"] and accounts.is_admin(user):
             return self.admin_post(user, p[2:], self.json_body())
+        return self.send(404, {"error": "not found"})
+
+    def controls(self, user: dict, rest: list, data):
+        """Desk Commands' Home Assistant and Docker pages. GET lists, POST {action} acts on one item."""
+        if not accounts.is_admin(user):
+            return self.send(403, {"error": "Only admins can use Home Assistant and Docker controls"})
+        try:
+            if rest == ["controls"] and data is None:
+                return self.send(200, controls.status())
+            if rest == ["home"] and data is None:
+                return self.send(200, controls.home_list())
+            if rest == ["docker"] and data is None:
+                return self.send(200, controls.docker_list())
+            if len(rest) == 2 and data is not None:
+                action = str(data.get("action", ""))
+                if rest[0] == "home":
+                    return self.send(200, controls.home_action(rest[1], action))
+                return self.send(200, controls.docker_action(rest[1], action))
+        except controls.ControlError as e:
+            return self.send(e.status, {"error": str(e)})
         return self.send(404, {"error": "not found"})
 
     def admin_post(self, user: dict, rest: list, data: dict):

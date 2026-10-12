@@ -48,6 +48,7 @@ const OLD_CHORDS: Record<OpenChord, Button[]> = {
 // Desk and Web Browser start off: they're for people who want a button straight to them.
 export const DEFAULT_COMBOS: Record<ComboAction, Button[]> = {
   radial: ["R4", "R5"],
+  commands: ["L5", "R5"],
   open: ["L4", "R4"],
   desk: [],
   web: [],

@@ -9,7 +9,7 @@ export const DEFAULT_ITEMS: RadialItem[] = [{ type: "game" }, { type: "notes" },
 export const MAX_ITEMS = 10;
 
 /** The built-in slots, for the "Add" buttons. */
-export const BUILT_IN: RadialItem[] = DEFAULT_ITEMS;
+export const BUILT_IN: RadialItem[] = [...DEFAULT_ITEMS, { type: "commands" }];
 
 export const radialItems = (s: Settings = getSettings()): RadialItem[] => s.radial?.items ?? DEFAULT_ITEMS;
 
@@ -26,6 +26,8 @@ export function itemLabel(item: RadialItem): string {
       return "Desk";
     case "web":
       return "Web Browser";
+    case "commands":
+      return "Commands";
     case "note":
       return item.title || "Untitled note";
   }
@@ -37,6 +39,7 @@ export const itemDescription = (item: RadialItem): string =>
     notes: "The notes list for the game you're playing.",
     desk: "Your Desk of Tomes.",
     web: "The browser, back on the page you had open.",
+    commands: "Desk Commands: search, new note, timers, dice, Home Assistant, Docker…",
     note: "A note pinned to the wheel.",
   })[item.type];
 

@@ -166,6 +166,31 @@ def _list_local_games() -> list:
     return [_summary(load_game(a)) for a in appids]
 
 
+def search_notes(query: str, limit: int = 40) -> list:
+    """Notes in every game whose title, text, tags or checklist have all the words in `query`, best first."""
+    words = [w for w in query.lower().split() if w]
+    if not words:
+        return []
+    hits = []
+    for summary in list_games():
+        game = load_game(summary["appId"])
+        for note in game.get("notes", []):
+            title = (note.get("title") or "").lower()
+            text = " ".join([title, (note.get("body") or "").lower(), " ".join(note.get("tags") or []).lower(),
+                             " ".join((i.get("text") or "").lower() for i in note.get("checklist") or [])])
+            if not all(w in text for w in words):
+                continue
+            score = sum(3 for w in words if w in title) + (5 if " ".join(words) in title else 0)
+            body = note.get("body") or ""
+            at = body.lower().find(words[0])
+            snippet = body[max(0, at - 30):at + 90].replace("\n", " ") if at >= 0 else body[:120].replace("\n", " ")
+            hits.append({"appId": summary["appId"], "gameName": summary.get("name") or summary["appId"], "id": note["id"],
+                         "title": note.get("title") or "", "snippet": snippet.strip(), "kind": note.get("kind"),
+                         "updatedAt": note.get("updatedAt") or 0, "score": score})
+    hits.sort(key=lambda h: (-h["score"], -h["updatedAt"]))
+    return hits[:limit]
+
+
 def get_game(appid: str) -> dict:
     game = load_game(appid)
     game["shared"] = load_shared().get(str(appid), [])

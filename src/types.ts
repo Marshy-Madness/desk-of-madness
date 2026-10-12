@@ -163,10 +163,10 @@ export type SortMode = "alpha" | "created" | "edited" | "recent";
 /** @deprecated the old fixed choices for the open combo; see Settings.combos */
 export type OpenChord = "l4r4" | "l5r5" | "l3r3" | "off";
 /**
- * What a button combo does: the radial menu, open the notes page ("open"), the Desk, the web browser, speech
+ * What a button combo does: the radial menu, Desk Commands (the command palette), open the notes page ("open"), the Desk, the web browser, speech
  * to text or a voice command. "tomes" is the old name of the radial combo, still read as its fallback.
  */
-export type ComboAction = "radial" | "open" | "desk" | "web" | "dictate" | "voice";
+export type ComboAction = "radial" | "commands" | "open" | "desk" | "web" | "dictate" | "voice";
 
 /** One slot on the radial menu. */
 export type RadialItem =
@@ -175,6 +175,8 @@ export type RadialItem =
   | { type: "notes" }
   | { type: "desk" }
   | { type: "web"; url?: string }
+  /** Desk Commands, the command palette. */
+  | { type: "commands" }
   /** A note pinned to the wheel (separate from pinning in the notes list). */
   | { type: "note"; appId: string; noteId: string; title: string; gameName?: string };
 
@@ -459,4 +461,33 @@ export interface SteamNewsItem {
   summary: string;
   image: string;
   official: boolean;
+}
+
+/** A note found by Desk Commands' search, from any game. */
+export interface NoteHit {
+  appId: string;
+  gameName: string;
+  id: string;
+  title: string;
+  snippet: string;
+  kind?: NoteKind;
+  updatedAt: number;
+}
+
+/** Something Home Assistant can switch or run (through the Desk server; admins only). */
+export interface HomeEntity {
+  id: string;
+  domain: string;
+  name: string;
+  /** null for scenes and scripts, which just run. */
+  state: string | null;
+}
+
+/** A container on the Desk server's machine (through its Docker socket proxy; admins only). */
+export interface DockerContainer {
+  name: string;
+  image: string;
+  state: string;
+  status: string;
+  project: string;
 }

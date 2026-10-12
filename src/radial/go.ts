@@ -1,7 +1,7 @@
 import { closeNotesPage, isNotesPageShowing, showPage } from "../opening";
 import { getRunningGame } from "../hooks/useAppLifetime";
 import { deskGame, pointDeskAt } from "../state/deskGame";
-import { lastPlaceAddress, NOTES_ROUTE, parsePlace, RADIAL_ROUTE, WEB_ROUTE } from "../state/place";
+import { COMMANDS_ROUTE, lastPlaceAddress, NOTES_ROUTE, parsePlace, RADIAL_ROUTE, WEB_ROUTE } from "../state/place";
 import { webPath } from "../browser";
 
 // Where the radial menu's slots and the Notes / Desk / Web Browser button combos take you.
@@ -21,6 +21,29 @@ export function goNotes(appId: string | null = currentGameId()) {
 export function goDesk(appId: string | null = currentGameId()) {
   pointDeskAt(appId);
   showPage(`${NOTES_ROUTE}/desk${appId ? `/${enc(appId)}` : ""}`);
+}
+
+/** A new note for the game, in its notes list's editor. */
+export function goNewNote(appId: string) {
+  pointDeskAt(appId);
+  showPage(`${NOTES_ROUTE}/desk/${enc(appId)}/view/notes/edit/new`);
+}
+
+/** Opens a note straight in the editor. */
+export function goEditNote(appId: string, noteId: string) {
+  pointDeskAt(appId);
+  showPage(`${NOTES_ROUTE}/desk/${enc(appId)}/view/notes/edit/${enc(noteId)}`);
+}
+
+export type CommandsView = "main" | "search" | "timer" | "dice" | "home" | "docker" | "games";
+
+/** Desk Commands, the command palette: its main list, or straight into one of its pages. */
+export function goCommands(opts: { view?: CommandsView; q?: string } = {}) {
+  const params = new URLSearchParams();
+  if (opts.view && opts.view !== "main") params.set("view", opts.view);
+  if (opts.q) params.set("q", opts.q);
+  const query = params.toString();
+  showPage(COMMANDS_ROUTE + (query ? `?${query}` : ""));
 }
 
 /** Opens one note in its game's notes list. */
@@ -53,6 +76,7 @@ export function notesCombo() {
 
 export const deskCombo = () => (isNotesPageShowing() ? closeNotesPage() : goDesk());
 export const webCombo = () => (isNotesPageShowing() ? closeNotesPage() : goWeb());
+export const commandsCombo = () => (isNotesPageShowing() ? closeNotesPage() : goCommands());
 
 // ---- the radial menu ----
 

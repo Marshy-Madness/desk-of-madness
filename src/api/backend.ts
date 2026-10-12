@@ -1,5 +1,5 @@
 import { call } from "@decky/api";
-import { DeskLayout, InstalledScroll, SteamNewsItem, WorkshopScroll, WorkshopEntry, WorkshopGame, WorkshopPack, WorkshopSummary, WorkshopUser, ServerUser, Share, BackupStatus, Counter, DeletedNote, Folder, NoteVersion, LeftOff, Game, GameSummary, Note, Recording, Screenshot, Settings, SteamScreenshot, ReaderPage, ReaderCacheSettings } from "../types";
+import { DockerContainer, HomeEntity, NoteHit, DeskLayout, InstalledScroll, SteamNewsItem, WorkshopScroll, WorkshopEntry, WorkshopGame, WorkshopPack, WorkshopSummary, WorkshopUser, ServerUser, Share, BackupStatus, Counter, DeletedNote, Folder, NoteVersion, LeftOff, Game, GameSummary, Note, Recording, Screenshot, Settings, SteamScreenshot, ReaderPage, ReaderCacheSettings } from "../types";
 
 export const backend = {
   importNotice: () => call<[], { from: string } | null>("import_notice"),
@@ -114,6 +114,16 @@ export const backend = {
     call<[], { temps: { cpu?: number; gpu?: number }; memory: { total?: number; used?: number }; battery: { percent: number; status: string } | null; load: number | null }>("system_stats"),
   storageStats: () => call<[], { label: string; path: string; total: number; free: number }[]>("storage_stats"),
   networkStats: () => call<[], { ssid: string | null; signal: number | null; connected: boolean }>("network_stats"),
+
+  // Desk Commands
+  searchNotes: (query: string, limit = 40) => call<[string, number], NoteHit[]>("search_notes", query, limit),
+  controlsStatus: () => call<[], { home: boolean; docker: boolean }>("controls_status"),
+  homeList: () => call<[], HomeEntity[]>("home_list"),
+  homeAction: (id: string, action: "toggle" | "turn_on" | "turn_off") =>
+    call<[string, string], { id: string; state: string | null }>("home_action", id, action),
+  dockerList: () => call<[], DockerContainer[]>("docker_list"),
+  dockerAction: (name: string, action: "start" | "stop" | "restart") =>
+    call<[string, string], { name: string; state: string }>("docker_action", name, action),
 
   getSettings: () => call<[], Settings>("get_settings"),
   saveSettings: (settings: Settings) => call<[Settings], void>("save_settings", settings),

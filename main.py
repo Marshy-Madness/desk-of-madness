@@ -391,6 +391,27 @@ class Plugin:
     async def network_stats(self):
         return await asyncio.to_thread(system.network)
 
+    # Desk Commands (the command palette)
+    async def search_notes(self, query: str, limit: int = 40):
+        return await asyncio.to_thread(storage.search_notes, query, limit)
+
+    async def controls_status(self):
+        if not storage.get_settings().get("syncUrl"):
+            return {"home": False, "docker": False}
+        return await asyncio.to_thread(self.sync.controls)
+
+    async def home_list(self):
+        return await asyncio.to_thread(self.sync.home_list)
+
+    async def home_action(self, entity_id: str, action: str):
+        return await asyncio.to_thread(self.sync.home_action, entity_id, action)
+
+    async def docker_list(self):
+        return await asyncio.to_thread(self.sync.docker_list)
+
+    async def docker_action(self, name: str, action: str):
+        return await asyncio.to_thread(self.sync.docker_action, name, action)
+
     async def import_notice(self):
         return migrate.take_notice()
 
