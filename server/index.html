@@ -44,6 +44,41 @@
   .tomeadm { display: flex; align-items: center; gap: 6px; padding: 3px 0; border-bottom: 1px solid var(--line); }
   .tome .counter { flex-wrap: nowrap; } .tome .counter .name { flex: 1 1 auto; min-width: 0; }
   @media (max-width: 700px) { .deskbtn span { display: none; } .deskbtn { padding: 6px 10px; } .gamehead h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }
+  /* ---- Desk home: pages, tiles, achievements ---- */
+  #homeBtn, #achBtn { white-space: nowrap; } body.home .fab, body.home #search { display: none !important; }
+  .pagetabs { display: flex; gap: 6px; margin: 12px 0; overflow-x: auto; } .pagetabs button { flex: 1 1 0; min-width: max-content; white-space: nowrap; }
+  .pagetabs button.primary { background: #7a4dd8; border-color: #7a4dd8; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin-bottom: 12px; }
+  .tile { min-height: 84px; padding: 10px 12px; border-radius: 10px; background: linear-gradient(160deg, rgba(255,255,255,.075), rgba(255,255,255,.02)); border: 1px solid rgba(255,255,255,.08); cursor: default; overflow: hidden; }
+  .tile[data-tile] { cursor: pointer; } .tile[data-tile]:hover { border-color: rgba(255,255,255,.2); }
+  .tile .tl, .tome .tl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .big { font-size: 26px; font-weight: 800; line-height: 1.15; margin: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .big .meta { font-weight: normal; }
+  .ell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .tedit { display: flex; gap: 4px; justify-content: center; margin-top: 4px; } .thead .tedit { margin: 0; }
+  .row2 { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .bar { height: 5px; border-radius: 5px; background: rgba(255,255,255,.1); overflow: hidden; margin-top: 4px; } .bar div { height: 100%; border-radius: 5px; }
+  .wbars { display: flex; align-items: flex-end; gap: 5px; margin-top: 4px; } .wbars > div { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0; }
+  .wbars i { display: block; width: 100%; border-radius: 3px; } .wbars small { font-size: 10px; opacity: .7; }
+  .dots { display: flex; gap: 4px; margin: 8px 0 4px; } .dots i { flex: 1; height: 10px; border-radius: 3px; }
+  .heat { display: grid; grid-template-rows: repeat(7, 12px); grid-auto-flow: column; grid-auto-columns: 12px; gap: 3px; overflow-x: auto; padding-bottom: 4px; } .heat i { border-radius: 2px; }
+  .hero { border-radius: 10px; padding: 12px 14px; background-size: cover; background-position: center; background-color: #1e2a38; margin-bottom: 10px; }
+  .ring { position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none; } .ring svg { position: absolute; inset: 0; } .ring b { font-size: 11px; position: relative; }
+  .ach { display: flex; gap: 10px; align-items: center; padding: 7px 10px; margin-bottom: 4px; border-radius: 8px; background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.06); }
+  .ach[data-achgame], .ach.secret { cursor: pointer; }
+  .ach.got { background: rgba(245,197,66,.06); border-color: rgba(245,197,66,.18); }
+  .ach img, .ach .noicon { width: 44px; height: 44px; border-radius: 6px; flex: none; object-fit: cover; display: inline-flex; align-items: center; justify-content: center; background: #2c323d; }
+  .ach:not(.got) img { filter: grayscale(1) brightness(.55); } .ach.secret:not(.shown) img { filter: grayscale(1) brightness(.55) blur(4px); }
+  .ach .t { flex: 1; min-width: 0; } .ach .t b { display: block; } .ach .r { text-align: right; font-size: 11px; flex: none; }
+  .ach.secret .real { display: none; } .ach.secret.shown .real { display: inline; } .ach.secret.shown .hide-txt { display: none; }
+  .ach.secret:not(.shown) .hide-txt { filter: blur(4px); }
+  .achgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: 0 10px; }
+  .libgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+  .gcard { border-radius: 10px; overflow: hidden; background: rgba(255,255,255,.04); border: 2px solid rgba(255,255,255,.07); cursor: pointer; }
+  .gcard:hover { border-color: rgba(255,255,255,.25); } .gcard.perfect { border-color: #f5c542; box-shadow: 0 0 14px rgba(245,197,66,.25); }
+  .gcard .art { height: 86px; background: #262b35 center/cover; position: relative; }
+  .pbadge { position: absolute; top: 6px; right: 6px; background: #f5c542; color: #222; font-weight: bold; font-size: 12px; border-radius: 8px; padding: 1px 8px; }
+  @media (max-width: 760px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .achgrid { grid-template-columns: minmax(0, 1fr); } .libgrid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); } .big { font-size: 22px; } }
   .counter .n { min-width: 40px; text-align: center; font-size: 18px; font-weight: bold; }
   .counter .name { flex: 1; } .defeated { opacity: .6; }
   .spoiler { filter: blur(5px); }
@@ -202,6 +237,8 @@
   <header>
     <h1>📝 Desk of Madness</h1>
     <select id="gamePicker" aria-label="Game"></select>
+    <button id="homeBtn">🗂<span class="hide-sm"> Desk</span></button>
+    <button id="achBtn">🏆<span class="hide-sm"> Achievements</span></button>
     <input id="search" placeholder="Search notes…">
     <a id="bookstoreLink" class="hidden" target="_blank" rel="noopener"><button>🏭 Madness Workshop</button></a>
     <a id="getApp" class="hidden" href="/download/android"><button>📱 Android app</button></a>
@@ -315,9 +352,10 @@ async function start() {
   $("#login").classList.add("hidden");
   $("#app").classList.remove("hidden");
   await loadGames();
-  const last = localStorage.getItem("sn-game");
-  if (last && games.some((g) => g.appId === last)) await openGame(last);
-  else if (games.length) await openGame(games[0].appId); // most recently played
+  $("#homeBtn").onclick = () => goHomePage(homePageId);
+  $("#achBtn").onclick = () => showAchievements();
+  // The Desk is the home screen; phones show it too (‹ Games goes to the game list).
+  await goHomePage(homePages().some((p) => p.id === homePageId) ? homePageId : homePages()[0].id);
   checkPwaShare();
   await checkBookstoreImport();
   window.DeskApp?.ready?.(); // native Android app: deliver any pending share
@@ -343,6 +381,8 @@ async function loadGames() {
 }
 
 async function openGame(appId) {
+  inHome = false; achView = null; setNavActive(null);
+  document.body.classList.remove("home");
   localStorage.setItem("sn-game", appId);
   folderFilter = "all";
   try { game = (await api(`/api/games/${encodeURIComponent(appId)}`)).game; }
@@ -388,6 +428,8 @@ function wireViewSwitch() {
 }
 
 function render() {
+  if (inHome) return renderHome();
+  if (achView) return renderAchievements();
   if (!game) return;
   if (gameView === "desk") return renderDesk();
   const q = $("#search").value.toLowerCase();
@@ -610,6 +652,7 @@ function renderDesk() {
   $("#content").innerHTML = `
     <div class="gamehead"><button class="mobile-only" id="backToGames" aria-label="All games">‹ Games</button>${gameIcon(games.find((g) => g.appId === game.appId) || game)}<h2 style="margin:0;flex:1">${esc(game.name)}</h2>
       <button id="deskAdd" class="deskbtn" title="Add or remove Tomes">＋<span> Tomes</span></button><button id="deskEdit" class="deskbtn ${deskEditing ? "primary" : ""}" title="${deskEditing ? "Done" : "Edit the Desk"}">${deskEditing ? "✓<span> Done</span>" : "✏️<span> Edit</span>"}</button></div>
+    ${pageTabs(GAME_PAGE)}
     ${viewSwitch()}
     <div class="desk">${on.map((id, i) => {
       const [, icon, name] = WEB_TOMES.find((t) => t[0] === id);
@@ -622,6 +665,7 @@ function renderDesk() {
   const c = $("#content");
   const change = (fn) => { const next = deskLayout(); next.order = ids; fn(next); saveDeskLayout(next); renderDesk(); };
   wireViewSwitch();
+  wirePageTabs(c);
   wireDictation(c);
   $("#backToGames").onclick = closeGame;
   $("#fabNote").onclick = () => editNote(null);
@@ -951,6 +995,315 @@ async function wikiDialog(view) {
   $("#wkQ", dlg).placeholder = `Search ${site.name}…`;
   show(view?.page ? { page: view.page } : view?.search ? { search: view.search } : { page: site.home });
   return dlg;
+}
+
+// ---------- the Desk home: pages of Tomes (play time, achievements), like the Deck's Desk ----------
+// Pages live in this browser (localStorage dom-pages). The game page is the game's own Desk (renderDesk).
+const GAME_PAGE = "game";
+const STARTER_PAGES = [
+  { id: "today", name: "Today", icon: "📅", tomes: ["last-session", "games-today", "today-time", "streak", "week-time", "most-played", "records", "activity"] },
+  { id: GAME_PAGE, name: "Game", icon: "🎮" },
+  { id: "trophies", name: "Trophies", icon: "🏆", tomes: ["ach-percent", "perfect-games", "unlock-totals", "rarest", "game-achievements", "recent-unlocks", "almost-perfect"] },
+];
+// id, icon, name, default size, description
+const HOME_TOMES = [
+  ["last-session", "⏱️", "Last Session", "tile", "How long you played last time, and what."],
+  ["games-today", "🎮", "Games Today", "tile", "How many different games you've played today."],
+  ["today-time", "☀️", "Played Today", "tile", "Today's playtime across every game."],
+  ["week-time", "📆", "This Week", "tile", "The last 7 days, a bar for each day."],
+  ["streak", "🔥", "Streak", "tile", "Days in a row you've played, and your best run."],
+  ["records", "🏅", "Records", "tile", "Longest and average session, totals."],
+  ["most-played", "👑", "Most Played", "card", "Top games this week, this month or of all time."],
+  ["activity", "🗓️", "Activity", "card", "A calendar of how much you played each day."],
+  ["ach-percent", "📈", "Achievement %", "tile", "Average completion: started games and all games."],
+  ["perfect-games", "⭐", "Perfect Games", "tile", "Games with every achievement."],
+  ["unlock-totals", "🏆", "Achievement Totals", "tile", "Everything unlocked, and this week."],
+  ["rarest", "💎", "Rarest Unlock", "tile", "Your rarest achievement by global %."],
+  ["game-achievements", "🎮", "This Game's Achievements", "card", "The last played game's progress and what's next."],
+  ["recent-unlocks", "🔓", "Recent Unlocks", "card", "Your latest unlocks across every game."],
+  ["almost-perfect", "🎯", "Almost Perfect", "card", "The games you're closest to finishing."],
+];
+let homePageId = localStorage.getItem("dom-page") || "today";
+let inHome = false, homeEditing = false, playStats = null, achData = null, mostPeriod = "week";
+
+function homePages() {
+  try { const p = JSON.parse(localStorage.getItem("dom-pages") || "null"); if (Array.isArray(p) && p.length) return p.some((x) => x.id === GAME_PAGE) ? p : [...p, STARTER_PAGES[1]]; } catch {}
+  return STARTER_PAGES.map((p) => ({ ...p, tomes: p.tomes && [...p.tomes] }));
+}
+const saveHomePages = (p) => localStorage.setItem("dom-pages", JSON.stringify(p));
+const pageSize = (page, id) => page.sizes?.[id] || HOME_TOMES.find((t) => t[0] === id)?.[3] || "card";
+
+const hm = (sec) => { const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60); return h ? `${h}h ${m}m` : `${m}m`; };
+const hrs = (sec) => `${Math.round(sec / 3600).toLocaleString()} h`;
+const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+const whenShort = (ms) => { const d = new Date(ms), now = new Date(); const days = Math.round((new Date(now.toDateString()) - new Date(d.toDateString())) / 864e5);
+  return days === 0 ? d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) : days === 1 ? "Yesterday" : d.toLocaleDateString(undefined, { month: "short", day: "numeric" }); };
+const headerArt = (appId) => `https://cdn.cloudflare.steamstatic.com/steam/apps/${encodeURIComponent(appId)}/header.jpg`;
+
+async function loadPlayStats() {
+  const q = new URLSearchParams({ tz: new Date().getTimezoneOffset(), dayStart: localStorage.getItem("dom-daystart") || 4, nonSteam: localStorage.getItem("dom-nonsteam") === "0" ? 0 : 1 });
+  playStats = await api(`/api/stats/play?${q}`).catch(() => null);
+}
+async function loadAchievements(refresh) {
+  achData = await api("/api/achievements" + (refresh ? "?refresh=1" : "")).catch(() => achData || { games: {} });
+}
+
+function achSummary() {
+  const games = Object.values(achData?.games || {}).filter((g) => g.total > 0);
+  const pct = (g) => g.unlocked / g.total;
+  const started = games.filter((g) => g.unlocked > 0), perfect = games.filter((g) => g.unlocked >= g.total);
+  const avg = (l) => (l.length ? (l.reduce((n, g) => n + pct(g), 0) / l.length) * 100 : 0);
+  const recent = games.flatMap((game) => (game.list || []).filter((a) => a.unlockedAt > 1).map((a) => ({ game, a }))).sort((x, y) => y.a.unlockedAt - x.a.unlockedAt);
+  const rarest = recent.filter((x) => x.a.globalPct != null).sort((x, y) => x.a.globalPct - y.a.globalPct)[0] || null;
+  const weekAgo = Date.now() / 1000 - 7 * 86400;
+  return { games, started, perfect, avgStarted: avg(started), avgAll: avg(games), unlocked: games.reduce((n, g) => n + g.unlocked, 0), total: games.reduce((n, g) => n + g.total, 0),
+    almost: started.filter((g) => g.unlocked < g.total).sort((x, y) => (x.total - x.unlocked) - (y.total - y.unlocked) || pct(y) - pct(x)),
+    recent, rarest, week: recent.filter((x) => x.a.unlockedAt >= weekAgo).length };
+}
+
+const statTile = (icon, label, value, sub, color) => `<div class="tl">${icon} ${esc(label)}</div><div class="big" ${color ? `style="color:${color}"` : ""}>${value}</div>${sub ? `<div class="meta ell">${sub}</div>` : ""}`;
+const ring = (v, size = 44, label) => { const r = (size - 6) / 2, c = 2 * Math.PI * r, done = v >= 1;
+  return `<span class="ring" style="width:${size}px;height:${size}px"><svg width="${size}" height="${size}"><circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="5"/><circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${done ? "#f5c542" : "#1a9fff"}" stroke-width="5" stroke-linecap="round" stroke-dasharray="${c * Math.min(1, v)} ${c}" transform="rotate(-90 ${size / 2} ${size / 2})"/></svg><b style="${done ? "color:#f5c542" : ""}">${label ?? Math.floor(v * 100) + "%"}</b></span>`; };
+const bar = (v, color = "#1a9fff") => `<div class="bar"><div style="width:${Math.max(0, Math.min(1, v)) * 100}%;background:${color}"></div></div>`;
+const rarity = (p) => p == null ? null : p < 5 ? ["Ultra rare", "#e05cff"] : p < 15 ? ["Rare", "#4fa3ff"] : p < 40 ? ["Uncommon", "#59bf40"] : ["Common", "rgba(255,255,255,.55)"];
+function achRow(a, gameName, appId) {
+  const secret = a.hidden && !a.unlockedAt, r = rarity(a.globalPct);
+  return `<div class="ach ${a.unlockedAt ? "got" : ""} ${secret ? "secret" : ""}" ${appId ? `data-achgame="${esc(appId)}"` : ""} title="${secret ? "Click to reveal" : ""}">
+    ${a.icon ? `<img src="${esc(a.icon)}" alt="" loading="lazy">` : '<span class="noicon">🏆</span>'}
+    <div class="t"><b class="ell">${secret ? '<span class="hide-txt">Hidden achievement</span><span class="real">' + esc(a.name) + "</span>" : esc(a.name)}</b>
+      <div class="meta">${secret ? '<span class="hide-txt">Click to reveal</span><span class="real">' + esc(a.description) + "</span>" : (gameName ? esc(gameName) + " · " : "") + esc(a.description)}</div>
+      ${!a.unlockedAt && a.progress ? `<div class="meta">${bar(a.progress.current / a.progress.max)} ${a.progress.current} / ${a.progress.max}</div>` : ""}</div>
+    <div class="r">${a.unlockedAt > 1 ? `<div style="color:#f5c542">${esc(day(a.unlockedAt * 1000))}</div>` : ""}${r ? `<div style="color:${r[1]}">${a.globalPct.toFixed(1)}% · ${r[0]}</div>` : ""}</div></div>`;
+}
+const achGameLine = (g) => `<div class="tline" data-achgame="${esc(g.appId)}">${ring(g.unlocked / g.total, 30, "")}<div style="flex:1;min-width:0"><div class="row2"><span class="ell">${esc(g.name)}</span><b>${Math.floor((g.unlocked / g.total) * 100)}%</b></div><div class="meta">${g.unlocked} / ${g.total} · ${g.total - g.unlocked} left</div></div></div>`;
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const weekdayOf = (d) => DAY_NAMES[new Date(d + "T12:00:00Z").getUTCDay()];
+function weekBars(days, h, labels) {
+  const max = Math.max(3600, ...days.map((d) => d.seconds));
+  return `<div class="wbars" style="height:${h + (labels ? 30 : 0)}px">${days.map((d, i) => `<div>${labels ? `<small>${d.seconds ? hm(d.seconds) : ""}</small>` : ""}<i style="height:${Math.max(3, (d.seconds / max) * h)}px;background:${d.seconds ? (i === days.length - 1 ? "#59bf40" : "#1a9fff") : "rgba(255,255,255,.1)"}"></i>${labels ? `<small>${weekdayOf(d.day)}</small>` : ""}</div>`).join("")}</div>`;
+}
+const SHADES = ["rgba(255,255,255,.07)", "#0e3a5c", "#105a8f", "#1479c4", "#1a9fff", "#7cc8ff"];
+const shade = (s) => SHADES[s <= 0 ? 0 : s < 1800 ? 1 : s < 3600 ? 2 : s < 7200 ? 3 : s < 14400 ? 4 : 5];
+
+/** A home Tome's insides, drawn as a tile or a card. */
+function homeTomeBody(id, size) {
+  const st = playStats, tile = size === "tile";
+  if (HOME_TOMES.findIndex((t) => t[0] === id) < 8) {
+    if (!st) return tile ? statTile("⏱️", "Play time", "…", "Loading") : '<div class="meta">Loading…</div>';
+    const l = st.last, games = st.today.games;
+    switch (id) {
+      case "last-session": return tile ? statTile("⏱️", l?.live ? "This session" : "Last session", l ? hm(l.seconds) : "—", l ? `${esc(l.name)} · ${l.live ? "now" : esc(whenShort(l.start))}` : "No sessions yet", l?.live ? "#59bf40" : "")
+        : l ? `<div class="hero" style="background-image:linear-gradient(90deg,rgba(14,20,27,.94) 45%,rgba(14,20,27,.5)),url('${headerArt(l.appId)}')"><div class="meta">${esc(l.name)}</div><div class="big">${hm(l.seconds)}</div><div class="meta">${l.live ? "Playing now" : esc(date(l.start))}</div></div>` : '<div class="meta">No sessions yet.</div>';
+      case "games-today": return tile ? statTile("🎮", "Games today", games.length, games.length ? esc(games.map((g) => g.name).join(", ")) : "None yet")
+        : games.length ? `<div class="meta">${plural(games.length, "different game")} today</div>${games.map((g) => line("🎮", "", esc(g.name), `data-opengame="${esc(g.appId)}"`)).join("")}` : '<div class="meta">Nothing played yet today.</div>';
+      case "today-time": { const avg = st.week.seconds / 7;
+        return tile ? statTile("☀️", "Played today", hm(st.today.seconds), plural(games.length, "game")) : `<div class="big">${hm(st.today.seconds)}</div><div class="meta">${plural(games.length, "game")} · your daily average this week is ${hm(avg)}</div>`; }
+      case "week-time": return tile ? statTile("📆", "This week", hm(st.week.seconds)) + weekBars(st.week.days, 18, false) : `<div class="big">${hm(st.week.seconds)} <span class="meta">last 7 days</span></div>${weekBars(st.week.days, 70, true)}`;
+      case "streak": { const s = st.streak, note = s.current && !s.playedToday ? "Play today to keep it going" : `Best: ${plural(s.best, "day")}`;
+        return tile ? statTile("🔥", "Streak", plural(s.current, "day"), note, s.current ? "#ff9a3c" : "")
+          : `<div class="big" style="color:#ff9a3c">🔥 ${plural(s.current, "day")} <span class="meta">best ${plural(s.best, "day")}</span></div><div class="dots">${st.calendar.slice(-14).map((d) => `<i title="${d.day}" style="background:${d.seconds ? "#ff9a3c" : "rgba(255,255,255,.1)"}"></i>`).join("")}</div><div class="meta">${note}. Last 14 days above.</div>`; }
+      case "records": { const r = st.records;
+        return tile ? statTile("🏅", "Longest session", r.longest ? hm(r.longest.seconds) : "—", `Average ${hm(r.averageSeconds)}`)
+          : `<div class="kv"><span>Longest session</span><b>${r.longest ? `${hm(r.longest.seconds)} <span class="meta">· ${esc(r.longest.name)}, ${esc(day(r.longest.start))}</span>` : "—"}</b><span>Average session</span><b>${hm(r.averageSeconds)}</b><span>Sessions</span><b>${r.sessions}</b><span>Total tracked</span><b>${hm(r.totalSeconds)}</b><span>Best streak</span><b>${plural(st.streak.best, "day")}</b></div>${st.trackedSince ? `<div class="meta">Since ${esc(day(st.trackedSince))}</div>` : ""}`; }
+      case "most-played": { const list = st.mostPlayed[mostPeriod] || [], t = mostPeriod === "allTime" ? hrs : hm;
+        const label = { week: "Week", month: "Month", allTime: "All time" }[mostPeriod];
+        if (tile) return statTile("👑", `Most played · ${label}`, list[0] ? t(list[0].seconds) : "—", list[0] ? esc(list[0].name) : "Nothing yet");
+        return `<div class="toolbar" style="margin:0 0 6px">${["week", "month", "allTime"].map((p) => `<button class="small ${p === mostPeriod ? "primary" : ""}" data-period="${p}">${{ week: "Week", month: "Month", allTime: "All time" }[p]}</button>`).join("")}</div>` +
+          (list.map((g, i) => `<div class="tline" data-opengame="${esc(g.appId)}"><div style="flex:1;min-width:0"><div class="row2"><span class="ell">${i + 1}. ${esc(g.name)}</span><b>${t(g.seconds)}</b></div>${bar(g.seconds / list[0].seconds, i ? "#1a9fff" : "#ff9a3c")}</div></div>`).join("") || '<div class="meta">Nothing played in this time.</div>') +
+          (mostPeriod === "allTime" ? '<div class="meta">All time uses Steam\'s own playtime.</div>' : ""); }
+      case "activity": { const days = st.calendar, played = days.filter((d) => d.seconds).length;
+        if (tile) return statTile("🗓️", "Activity", `${days.slice(-28).filter((d) => d.seconds).length}/28`, "days played, last 4 weeks");
+        const pad = new Date(days[0].day + "T12:00:00Z").getUTCDay();
+        return `<div class="heat">${"<i></i>".repeat(pad)}${days.map((d) => `<i title="${d.day}: ${hm(d.seconds)}" style="background:${shade(d.seconds)}"></i>`).join("")}</div><div class="meta">${played} of ${days.length} days played</div>`; }
+    }
+  }
+  if (!achData) return tile ? statTile("🏆", "Achievements", "…", "Loading") : '<div class="meta">Loading…</div>';
+  const s = achSummary();
+  if (!s.games.length) return tile ? statTile("🏆", "Achievements", "—", "None synced yet") : `<div class="meta">No achievements yet. They come from the Deck's sync${achData.webApi ? " or Steam (sign in with Steam)" : ""}.</div>`;
+  const viewAll = (app, view) => `<div class="toolbar" style="margin:6px 0 0"><button class="small" data-achall="${esc(app || "")}|${view || ""}">View all</button></div>`;
+  switch (id) {
+    case "ach-percent": return tile ? statTile("📈", "Achievement %", `${s.avgStarted.toFixed(1)}%`, `${s.avgAll.toFixed(1)}% over all games`)
+      : `<div class="row2" style="justify-content:flex-start;gap:16px">${ring(s.avgStarted / 100, 64, Math.round(s.avgStarted) + "%")}<div><div><b>${s.avgStarted.toFixed(1)}%</b> <span class="meta">over ${s.started.length} started games</span></div><div><b>${s.avgAll.toFixed(1)}%</b> <span class="meta">over all ${s.games.length} games with achievements</span></div></div></div>${viewAll()}`;
+    case "perfect-games": { const close = s.almost.filter((g) => g.total - g.unlocked <= 3).length;
+      return tile ? statTile("⭐", "Perfect games", s.perfect.length, close ? `${close} within 3` : `${s.started.length} started`, s.perfect.length ? "#f5c542" : "")
+        : `<div class="big" style="color:#f5c542">★ ${s.perfect.length}</div>${s.perfect.sort((a, b) => (b.lastPlayed || 0) - (a.lastPlayed || 0)).slice(0, 4).map(achGameLine).join("")}${close ? `<div class="meta">${close} more within 3 achievements.</div>` : ""}${viewAll()}`; }
+    case "unlock-totals": return tile ? statTile("🏆", "Achievements", s.unlocked.toLocaleString(), `${s.week} this week`)
+      : `<div class="big">${s.unlocked.toLocaleString()} <span class="meta">of ${s.total.toLocaleString()} unlocked</span></div>${bar(s.total ? s.unlocked / s.total : 0)}<div class="meta">${s.week} this week · ${s.started.length} games started · ${s.games.length} with achievements</div>${viewAll()}`;
+    case "rarest": { const r = s.rarest;
+      return tile ? statTile("💎", "Rarest unlock", r ? r.a.globalPct.toFixed(1) + "%" : "—", r ? `${esc(r.a.name)} · ${esc(r.game.name)}` : "Open a game to load", r ? "#e05cff" : "")
+        : r ? achRow(r.a, r.game.name, r.game.appId) : '<div class="meta">Your rarest unlock shows once your games\' lists are in.</div>'; }
+    case "game-achievements": {
+      const g = [...s.games].sort((a, b) => (b.lastPlayed || 0) - (a.lastPlayed || 0))[0];
+      if (!g) return '<div class="meta">—</div>';
+      if (tile) return statTile("🏆", g.name, `${Math.floor((g.unlocked / g.total) * 100)}%`, `${g.unlocked} / ${g.total}`) + bar(g.unlocked / g.total);
+      const next = (g.list || []).filter((a) => !a.unlockedAt).sort((a, b) => (b.globalPct || 0) - (a.globalPct || 0)).slice(0, 3);
+      return `<div class="row2" style="justify-content:flex-start;gap:12px">${ring(g.unlocked / g.total, 52)}<div style="flex:1"><b>${esc(g.name)}</b> <span class="meta">${g.unlocked} of ${g.total}</span>${bar(g.unlocked / g.total)}</div></div>` +
+        (next.length ? `<div class="tl" style="margin:8px 0 4px">Up next (most players have these)</div>${next.map((a) => achRow(a)).join("")}` : "") + viewAll(g.appId); }
+    case "recent-unlocks": return tile ? statTile("🔓", "Latest unlock", s.recent[0] ? esc(s.recent[0].a.name) : "—", s.recent[0] ? `${esc(s.recent[0].game.name)} · ${esc(whenShort(s.recent[0].a.unlockedAt * 1000))}` : "None yet")
+      : (s.recent.slice(0, 5).map(({ game: g, a }) => achRow(a, g.name, g.appId)).join("") || '<div class="meta">No unlocks loaded yet.</div>') + viewAll("", "timeline");
+    case "almost-perfect": { const top = s.almost[0];
+      return tile ? statTile("🎯", "Almost perfect", top ? `${top.total - top.unlocked} left` : "—", top ? esc(top.name) : "Nothing started")
+        : (s.almost.slice(0, 5).map(achGameLine).join("") || '<div class="meta">Nothing in progress.</div>') + viewAll(); }
+  }
+  return "";
+}
+
+const pageTabs = (cur) => `<div class="pagetabs">${homePages().map((p) => `<button data-page="${esc(p.id)}" class="${p.id === cur ? "primary" : ""}">${esc(p.icon)} ${esc(p.name)}</button>`).join("")}</div>`;
+function wirePageTabs(root) {
+  root.querySelectorAll("[data-page]").forEach((b) => (b.onclick = () => goHomePage(b.dataset.page)));
+}
+
+/** Opens a page of the Desk home; the game page is the last played game's Desk. */
+async function goHomePage(id) {
+  homePageId = id; localStorage.setItem("dom-page", id);
+  inHome = true; achView = null;
+  document.body.classList.add("ingame", "home");
+  setNavActive("home");
+  if (id === GAME_PAGE) {
+    // The game you're playing or played last (by its sessions), else the one you opened last here.
+    if (!playStats) await loadPlayStats();
+    const known = (id) => id && games.some((g) => g.appId === id) && id;
+    const target = known(playStats?.last?.appId) || known(localStorage.getItem("sn-game")) || games[0]?.appId;
+    if (!target) { $("#content").innerHTML = pageTabs(id) + '<p class="meta">No games yet. Turn on sync in the Deck plugin, or add a game.</p>'; wirePageTabs($("#content")); return; }
+    gameView = "desk";
+    return openGame(target);
+  }
+  renderHome();
+  await Promise.all([loadPlayStats(), loadAchievements()]);
+  if (inHome && homePageId === id && !achView) renderHome();
+}
+
+function renderHome() {
+  const pages = homePages(), page = pages.find((p) => p.id === homePageId) || pages[0];
+  const ids = (page.tomes || []).filter((id) => HOME_TOMES.some((t) => t[0] === id));
+  // Runs of tiles in a grid, cards in columns.
+  const runs = [];
+  for (const id of ids) { const size = pageSize(page, id); const last = runs[runs.length - 1]; if (last && last.size === size) last.ids.push(id); else runs.push({ size, ids: [id] }); }
+  const edit = (id, i) => homeEditing ? `<div class="tedit"><button class="icon" data-hmove="${id}|-1" ${i === 0 ? "disabled" : ""}>←</button><button class="icon" data-hmove="${id}|1" ${i === ids.length - 1 ? "disabled" : ""}>→</button><button class="icon" data-hsize="${id}" title="Tile or card">${pageSize(page, id) === "tile" ? "⤢" : "⤡"}</button><button class="icon" data-hhide="${id}">✕</button></div>` : "";
+  let n = 0;
+  const body = runs.map((r) => r.size === "tile"
+    ? `<div class="tiles">${r.ids.map((id) => `<div><div class="tile" data-tile="${id}">${homeTomeBody(id, "tile")}</div>${edit(id, n++)}</div>`).join("")}</div>`
+    : `<div class="desk">${r.ids.map((id) => { const t = HOME_TOMES.find((x) => x[0] === id);
+        return `<div class="box tome"><div class="thead"><span class="tfold">${t[1]} ${esc(t[2])}</span>${edit(id, n++)}</div><div class="tbody">${homeTomeBody(id, "card")}</div></div>`; }).join("")}</div>`).join("");
+  $("#content").innerHTML = `<div class="gamehead"><button class="mobile-only" id="backToGames">‹ Games</button><h2 style="margin:0;flex:1">🗂 Desk</h2>
+      <button id="homeAdd" class="deskbtn">＋<span> Tomes</span></button><button id="homeEdit" class="deskbtn ${homeEditing ? "primary" : ""}">${homeEditing ? "✓<span> Done</span>" : "✏️<span> Edit</span>"}</button></div>
+    ${pageTabs(page.id)}
+    ${homeEditing ? '<div class="toolbar"><button id="pagesBtn">📑 Pages…</button><span class="meta">Pages and their Tomes are saved in this browser.</span></div>' : ""}
+    ${body || '<p class="meta">This page is empty. Use ＋ Tomes to add some.</p>'}`;
+  const c = $("#content");
+  wirePageTabs(c);
+  $("#backToGames").onclick = () => { inHome = false; closeGame(); };
+  $("#homeEdit").onclick = () => { homeEditing = !homeEditing; renderHome(); };
+  if ($("#pagesBtn")) $("#pagesBtn").onclick = pagesDialog;
+  const change = (fn) => { const all = homePages(); const p = all.find((x) => x.id === page.id); p.tomes = [...(p.tomes || [])]; fn(p); saveHomePages(all); renderHome(); };
+  $("#homeAdd").onclick = () => {
+    const dlg = document.createElement("dialog");
+    dlg.innerHTML = `<h3 style="margin-top:0">Tomes on ${esc(page.name)}</h3>${[["⏱️ Play time", 0, 8], ["🏆 Achievements", 8, 15]].map(([label, a, b]) => `<h4>${label}</h4>` +
+      HOME_TOMES.slice(a, b).map(([id, icon, name, , desc]) => `<label class="radio"><input type="checkbox" data-t="${id}" ${ids.includes(id) ? "checked" : ""}><span>${icon} <b>${esc(name)}</b><br><span class="meta">${esc(desc)}</span></span></label>`).join("")).join("")}
+      <p class="meta">The game page's Tomes (notes, checklists, counters…) are on 🎮 Game.</p><div class="actions toolbar"><button class="primary" id="tDone">Done</button></div>`;
+    document.body.appendChild(dlg); dlg.showModal();
+    dlg.querySelector("#tDone").onclick = () => {
+      const on = [...dlg.querySelectorAll("[data-t]")].filter((x) => x.checked).map((x) => x.dataset.t);
+      change((p) => { p.tomes = [...p.tomes.filter((id) => on.includes(id)), ...on.filter((id) => !p.tomes.includes(id))]; });
+      dlg.close(); dlg.remove();
+    };
+  };
+  c.querySelectorAll("[data-hmove]").forEach((b) => (b.onclick = () => change((p) => { const [id, by] = b.dataset.hmove.split("|"); const i = p.tomes.indexOf(id), j = i + Number(by); if (j < 0 || j >= p.tomes.length) return; [p.tomes[i], p.tomes[j]] = [p.tomes[j], p.tomes[i]]; })));
+  c.querySelectorAll("[data-hsize]").forEach((b) => (b.onclick = () => change((p) => { const id = b.dataset.hsize; p.sizes = { ...p.sizes, [id]: pageSize(p, id) === "tile" ? "card" : "tile" }; })));
+  c.querySelectorAll("[data-hhide]").forEach((b) => (b.onclick = () => change((p) => { p.tomes = p.tomes.filter((x) => x !== b.dataset.hhide); })));
+  c.querySelectorAll("[data-period]").forEach((b) => (b.onclick = () => { mostPeriod = b.dataset.period; renderHome(); }));
+  c.querySelectorAll("[data-opengame]").forEach((el) => (el.onclick = () => { inHome = false; gameView = "desk"; openGame(el.dataset.opengame); }));
+  wireAch(c);
+  c.querySelectorAll("[data-tile]").forEach((el) => {
+    const id = el.dataset.tile;
+    if (id.startsWith("ach") || ["perfect-games", "unlock-totals", "rarest", "game-achievements", "recent-unlocks", "almost-perfect"].includes(id))
+      el.onclick = () => showAchievements({ view: id === "recent-unlocks" ? "timeline" : "library" });
+    else if (id === "most-played") el.onclick = () => { mostPeriod = { week: "month", month: "allTime", allTime: "week" }[mostPeriod]; renderHome(); };
+  });
+}
+
+function pagesDialog() {
+  const dlg = document.createElement("dialog");
+  const draw = () => {
+    const pages = homePages();
+    dlg.innerHTML = `<h3 style="margin-top:0">Pages</h3>${pages.map((p, i) => `<div class="tomeadm"><input data-icon="${p.id}" value="${esc(p.icon)}" style="width:52px;text-align:center"><input data-name="${p.id}" value="${esc(p.name)}" style="flex:1" maxlength="24">
+        ${p.id === GAME_PAGE ? '<span class="meta">follows the game</span>' : ""}<button class="icon" data-pmove="${i}|-1" ${i ? "" : "disabled"}>↑</button><button class="icon" data-pmove="${i}|1" ${i < pages.length - 1 ? "" : "disabled"}>↓</button><button class="icon danger" data-pdel="${p.id}" ${p.id === GAME_PAGE ? "disabled" : ""}>🗑</button></div>`).join("")}
+      <div class="toolbar"><button id="pAdd">＋ New page</button><button id="pReset">Starter pages</button></div><div class="actions toolbar"><button class="primary" id="pDone">Done</button></div>`;
+    const keep = () => { const all = homePages(); for (const p of all) { p.name = dlg.querySelector(`[data-name="${p.id}"]`).value.trim().slice(0, 24) || p.name; p.icon = dlg.querySelector(`[data-icon="${p.id}"]`).value.trim().slice(0, 4) || p.icon; } return all; };
+    dlg.querySelectorAll("[data-pmove]").forEach((b) => (b.onclick = () => { const all = keep(); const [i, by] = b.dataset.pmove.split("|").map(Number); [all[i], all[i + by]] = [all[i + by], all[i]]; saveHomePages(all); draw(); }));
+    dlg.querySelectorAll("[data-pdel]").forEach((b) => (b.onclick = () => { saveHomePages(keep().filter((p) => p.id !== b.dataset.pdel)); draw(); }));
+    dlg.querySelector("#pAdd").onclick = () => { const all = keep(); all.push({ id: "p" + Date.now().toString(36), name: "New page", icon: "⭐", tomes: [] }); saveHomePages(all); draw(); };
+    dlg.querySelector("#pReset").onclick = () => { localStorage.removeItem("dom-pages"); draw(); };
+    dlg.querySelector("#pDone").onclick = () => { saveHomePages(keep()); dlg.close(); dlg.remove(); if (!homePages().some((p) => p.id === homePageId)) homePageId = homePages()[0].id; renderHome(); };
+  };
+  document.body.appendChild(dlg); draw(); dlg.showModal();
+}
+
+// ---------- 🏆 Achievements: stats header, library grid, timeline, one game's list ----------
+let achView = null, achSort = "recent", achFilter = "all", achGameSort = "default";
+function setNavActive(which) {
+  $("#homeBtn")?.classList.toggle("primary", which === "home");
+  $("#achBtn")?.classList.toggle("primary", which === "ach");
+  if (which) $("#games").querySelectorAll("button").forEach((b) => b.classList.remove("active"));
+}
+function wireAch(root) {
+  root.querySelectorAll("[data-achgame]").forEach((el) => (el.onclick = (e) => {
+    if (el.classList.contains("secret")) { el.classList.toggle("shown"); return; }
+    showAchievements({ app: el.dataset.achgame });
+  }));
+  root.querySelectorAll(".ach.secret:not([data-achgame])").forEach((el) => (el.onclick = () => el.classList.toggle("shown")));
+  root.querySelectorAll("[data-achall]").forEach((b) => (b.onclick = () => { const [app, view] = b.dataset.achall.split("|"); showAchievements({ app: app || null, view: view || "library" }); }));
+}
+async function showAchievements({ app = null, view = "library" } = {}) {
+  inHome = false; achView = { app, view };
+  document.body.classList.add("ingame", "home");
+  setNavActive("ach");
+  renderAchievements();
+  await loadAchievements();
+  if (achView) renderAchievements();
+}
+function renderAchievements() {
+  const s = achSummary(), v = achView;
+  const tile = (label, value, sub, color) => `<div class="tile">${statTile("", label, value, sub, color)}</div>`;
+  let body;
+  if (v.app) {
+    const g = achData?.games?.[v.app];
+    const list = (g?.list || []).filter((a) => achFilter === "all" || (achFilter === "unlocked" ? a.unlockedAt : !a.unlockedAt))
+      .sort((a, b) => achGameSort === "rarity" ? (a.globalPct ?? 100) - (b.globalPct ?? 100) : achGameSort === "date" ? b.unlockedAt - a.unlockedAt : (b.unlockedAt ? 1 : 0) - (a.unlockedAt ? 1 : 0) || b.unlockedAt - a.unlockedAt);
+    body = `<div class="hero" style="display:flex;gap:16px;align-items:center;background-image:linear-gradient(90deg,rgba(14,20,27,.95) 40%,rgba(14,20,27,.55)),url('${headerArt(v.app)}')">${g ? ring(g.unlocked / g.total, 72) : ""}
+        <div style="flex:1"><h2 style="margin:0">${esc(g?.name || v.app)}</h2><div class="meta">${g ? `${g.unlocked} of ${g.total} unlocked${g.unlocked >= g.total ? " · ★ Perfect game" : ""}` : "Not synced yet"}</div></div><button data-achback="1">‹ Library</button></div>
+      <div class="toolbar">${[["all", "All"], ["unlocked", "Unlocked"], ["locked", "Locked"]].map(([k, l]) => `<button class="small ${k === achFilter ? "primary" : ""}" data-afilter="${k}">${l}</button>`).join("")}
+        <span style="width:12px"></span>${[["default", "Unlocked first"], ["date", "Newest"], ["rarity", "Rarest"]].map(([k, l]) => `<button class="small ${k === achGameSort ? "primary" : ""}" data-agsort="${k}">${l}</button>`).join("")}</div>
+      ${g && !g.list ? '<div class="meta">The full list arrives with the next Deck sync (or from Steam, once signed in with Steam).</div>' : ""}
+      <div class="achgrid">${list.map((a) => achRow(a)).join("")}</div>`;
+  } else {
+    const sorts = { recent: (a, b) => (b.lastPlayed || 0) - (a.lastPlayed || 0), percent: (a, b) => b.unlocked / b.total - a.unlocked / a.total,
+      closest: (a, b) => (a.unlocked >= a.total) - (b.unlocked >= b.total) || (b.unlocked > 0) - (a.unlocked > 0) || (a.total - a.unlocked) - (b.total - b.unlocked), name: (a, b) => a.name.localeCompare(b.name) };
+    const tabs = `<div class="pagetabs"><button data-aview="library" class="${v.view === "library" ? "primary" : ""}">🎮 Library (${s.games.length})</button><button data-aview="timeline" class="${v.view === "timeline" ? "primary" : ""}">🕒 Timeline</button></div>`;
+    if (v.view === "timeline") {
+      const days = [];
+      for (const x of s.recent.slice(0, 200)) { const d = day(x.a.unlockedAt * 1000); const last = days[days.length - 1]; if (last?.d === d) last.items.push(x); else days.push({ d, items: [x] }); }
+      body = tabs + (days.map((d) => `<h4>${esc(d.d)} <span class="meta">· ${d.items.length}</span></h4>${d.items.map(({ game: g, a }) => achRow(a, g.name, g.appId)).join("")}`).join("") || '<p class="meta">Unlocks show here once your games\' lists are in.</p>');
+    } else {
+      body = tabs + `<div class="toolbar">${[["recent", "Recently played"], ["percent", "Highest %"], ["closest", "Closest to perfect"], ["name", "Name"]].map(([k, l]) => `<button class="small ${k === achSort ? "primary" : ""}" data-asort="${k}">${l}</button>`).join("")}</div>
+        <div class="libgrid">${[...s.games].sort(sorts[achSort]).map((g) => { const perfect = g.unlocked >= g.total;
+          return `<div class="gcard ${perfect ? "perfect" : ""}" data-achgame="${esc(g.appId)}"><div class="art" style="background-image:url('${headerArt(g.appId)}')">${perfect ? '<span class="pbadge">★ Perfect</span>' : ""}</div>
+            <div class="row2" style="justify-content:flex-start;gap:10px;padding:8px 10px">${ring(g.unlocked / g.total)}<div style="min-width:0"><b class="ell" style="display:block">${esc(g.name)}</b><span class="meta">${g.unlocked} / ${g.total}${!perfect && g.unlocked ? ` · ${g.total - g.unlocked} left` : ""}</span></div></div></div>`; }).join("")
+          || `<p class="meta">No achievements yet. The Deck sends them with its sync${achData?.webApi ? (achData?.steamLinked ? "; Steam is being asked too, give it a minute." : "; or sign in with Steam (Account) and the server asks Steam.") : "."}</p>`}</div>`;
+    }
+  }
+  $("#content").innerHTML = `<div class="gamehead"><button class="mobile-only" id="backToGames">‹ Games</button><h2 style="margin:0;flex:1">🏆 Achievements</h2><button id="achRefresh">⟳ Refresh</button></div>
+    <div class="tiles" style="margin:12px 0">${tile("Unlocked", s.unlocked.toLocaleString(), `of ${s.total.toLocaleString()} · ${s.week} this week`)}${tile("Average completion", s.avgStarted.toFixed(1) + "%", `${s.avgAll.toFixed(1)}% over all ${s.games.length} games`)}
+      ${tile("Perfect games", s.perfect.length, `${s.started.length} started`, s.perfect.length ? "#f5c542" : "")}${tile("Rarest unlock", s.rarest ? s.rarest.a.globalPct.toFixed(1) + "%" : "—", s.rarest ? `${esc(s.rarest.a.name)} · ${esc(s.rarest.game.name)}` : "—", s.rarest ? "#e05cff" : "")}</div>${body}`;
+  const c = $("#content");
+  $("#backToGames").onclick = () => { achView = null; closeGame(); };
+  $("#achRefresh").onclick = async () => { $("#achRefresh").textContent = "Asking Steam…"; await loadAchievements(true); setTimeout(async () => { await loadAchievements(); if (achView) renderAchievements(); }, 8000); if (achView) renderAchievements(); };
+  c.querySelectorAll("[data-aview]").forEach((b) => (b.onclick = () => { achView = { app: null, view: b.dataset.aview }; renderAchievements(); }));
+  c.querySelectorAll("[data-asort]").forEach((b) => (b.onclick = () => { achSort = b.dataset.asort; renderAchievements(); }));
+  c.querySelectorAll("[data-afilter]").forEach((b) => (b.onclick = () => { achFilter = b.dataset.afilter; renderAchievements(); }));
+  c.querySelectorAll("[data-agsort]").forEach((b) => (b.onclick = () => { achGameSort = b.dataset.agsort; renderAchievements(); }));
+  c.querySelectorAll("[data-achback]").forEach((b) => (b.onclick = () => { achView = { app: null, view: "library" }; renderAchievements(); }));
+  wireAch(c);
 }
 
 // ---------- version history / recently deleted ----------
@@ -1841,7 +2194,10 @@ window.snResume = async () => {
     if (!info.loggedIn) return showLogin();
     paintAnnouncement(info.announcement);
     await loadGames();
-    if (game && !$("#panel").open && !$("#editor").open) {
+    if (inHome || achView) {
+      await Promise.all([loadPlayStats(), loadAchievements()]);
+      render();
+    } else if (game && !$("#panel").open && !$("#editor").open) {
       game = (await api(`/api/games/${encodeURIComponent(game.appId)}`)).game;
       render();
     }
