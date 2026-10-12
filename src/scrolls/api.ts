@@ -5,7 +5,7 @@ import type { routerHook, toaster } from "@decky/api";
 import type { TomeDef } from "../tomes/registry";
 import type { Line, Buttons, Btn, Hint } from "../tomes/bits";
 import type { MainMenuHook, QamTabsHook } from "./hooks";
-import type { Game, Note, ReaderPage, SteamNewsItem, WikiResult, WikiSite, WorkshopSummary } from "../types";
+import type { Game, Note, ReaderPage, SteamNewsItem, WikiChoice, WikiResult, WikiSite, WorkshopSummary } from "../types";
 
 // What a code Scroll gets. A Scroll's code is a function `activate(desk)` (the default export of its
 // index.tsx, see scrolls/README.md); it may return a cleanup. Everything it adds through `desk` is removed
@@ -68,6 +68,11 @@ export interface DeskScrollApi {
     /** The wiki an address (or bare host name) is on; throws if it isn't one. */
     site(url: string): Promise<WikiSite>;
     search(wiki: string, q: string): Promise<WikiResult[]>;
+    /** The wikis picked for each game, synced with the server and the website (first = the game's main wiki;
+     * an empty list = none picked). `refresh` asks the server first. Since 0.4.0-beta.3. */
+    picked?(refresh?: boolean): Promise<Record<string, WikiChoice>>;
+    /** Sets a game's wikis, in order (first = main); [] forgets them. Since 0.4.0-beta.3. */
+    pick?(appId: string, wikis: WikiSite[]): Promise<WikiChoice>;
   };
   /** The game being played, if any. Since 0.3.2-beta.2. */
   runningGame(): { appId: string; name: string } | null;

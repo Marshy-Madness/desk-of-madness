@@ -165,6 +165,57 @@ def search(url: str, q: str, limit: int = 20, context=None) -> list:
             for h in hits if h.get("title")]
 
 
+# ---------- the wikis picked for each game (synced between the Deck and the website) ----------
+# {appId: {"wikis": [site, …], "at": ms}}. The first wiki is the game's main one; an empty list means "none picked"
+# (kept, so forgetting a game's wikis reaches the other devices). Per game, the newer pick wins.
+
+MAX_PER_GAME = 12
+_SITE_KEYS = ("base", "api", "name", "home", "logo", "articlePath")
+
+
+def _clean_site(w) -> dict:
+    if not isinstance(w, dict) or not all(isinstance(w.get(k), str) and w.get(k) for k in ("base", "api", "home", "articlePath")):
+        return None
+    if not all(re.match(r"^https?://", w[k], re.I) for k in ("base", "api", "home", "articlePath")):
+        return None
+    out = {k: w.get(k) for k in _SITE_KEYS}
+    out["name"] = str(out.get("name") or out["base"])[:120]
+    if not isinstance(out.get("logo"), str):
+        out["logo"] = None
+    return out
+
+
+def clean_choice(c) -> dict:
+    """One game's pick, or None if it's malformed. Drops bad and repeated wikis."""
+    if not isinstance(c, dict) or not isinstance(c.get("wikis"), list):
+        return None
+    wikis, seen = [], set()
+    for w in c["wikis"]:
+        w = _clean_site(w)
+        if w and w["base"] not in seen:
+            seen.add(w["base"])
+            wikis.append(w)
+    try:
+        at = int(c.get("at") or 0)
+    except (TypeError, ValueError):
+        at = 0
+    return {"wikis": wikis[:MAX_PER_GAME], "at": at}
+
+
+def merge_choices(old: dict, new: dict) -> dict:
+    """Both are {appId: {"wikis", "at"}}; per game the newer one wins (ties keep the old one)."""
+    out = {str(k): v for k, v in (old or {}).items() if clean_choice(v)}
+    for appid, c in (new or {}).items():
+        c = clean_choice(c)
+        if not c:
+            continue
+        prev = out.get(str(appid))
+        if prev and (prev.get("at") or 0) >= c["at"]:
+            continue
+        out[str(appid)] = c
+    return out
+
+
 if __name__ == "__main__":  # python3 wiki.py "Elden Ring" [query]
     import sys
     sites = find(sys.argv[1])

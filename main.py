@@ -1,6 +1,7 @@
 import asyncio
 import os
 import re
+import time
 
 import decky
 import migrate
@@ -298,6 +299,32 @@ class Plugin:
         return await asyncio.to_thread(self._server_or_here,
                                        lambda: self.sync.wiki("search", wiki=wiki_url, q=q)["results"],
                                        lambda: wiki.search(wiki_url, q, context=SSL_CONTEXT))
+
+    # the wikis picked for each game, synced with the server (and so with the website)
+    def _push_wiki_choices(self):
+        if not storage.get_settings().get("syncUrl") or self.sync.running:
+            return  # a running sync sends them anyway
+        try:
+            state = self.sync._state()
+            if self.sync._sync_wiki_choices(state):
+                self.sync._save_state(state)
+        except Exception as e:  # offline: the next sync sends it
+            decky.logger.info(f"wiki picks not synced now: {e}")
+
+    async def wiki_choices(self, refresh: bool = False):
+        """{appId: {"wikis": [...], "at": ms}}; refresh asks the server for the website's picks first."""
+        if refresh:
+            await asyncio.to_thread(self._push_wiki_choices)
+        return storage.load_wiki_choices()
+
+    async def wiki_choose(self, appid: str, wikis: list):
+        """Sets a game's wikis (the first is its main one; [] = none picked) and sends them to the server."""
+        choice = wiki.clean_choice({"wikis": wikis, "at": int(time.time() * 1000)})
+        if choice is None:
+            raise RuntimeError("Those aren't wikis")
+        storage.save_wiki_choices({**storage.load_wiki_choices(), str(appid): choice})
+        await asyncio.to_thread(self._push_wiki_choices)
+        return storage.load_wiki_choices().get(str(appid), choice)
 
     async def reader_settings(self):
         if not storage.get_settings().get("syncUrl"):

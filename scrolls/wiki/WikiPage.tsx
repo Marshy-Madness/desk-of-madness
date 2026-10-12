@@ -27,7 +27,8 @@ import * as s from "../../src/components/styles";
 export const ROUTE = "/desk-of-madness-wiki";
 
 export interface WikiSettings {
-  /** The wiki chosen for each game (key: app ID; "" = no game). */
+  /** Before Desk synced picks (0.4.0-beta.3): the one wiki chosen for each game on this Deck. Used on older Desks,
+   * and moved into the synced picks once. */
   wikis?: Record<string, WikiSite>;
   /** Recently read pages per game, newest first. */
   recent?: Record<string, { title: string; url: string }[]>;
@@ -41,6 +42,8 @@ export interface Target {
   appId: string;
   gameName: string;
   view?: View;
+  /** Which of the game's wikis (its base address); else the one the page is on, else the main one. */
+  wiki?: string;
 }
 
 const RECENT_MAX = 10;
@@ -58,6 +61,11 @@ const SELECT_CSS = `
 .dom-wiki .wk-block > :last-child { margin-bottom: 0.9em; }
 .dom-wiki .sn-reader caption { font-weight: bold; padding: 0.3em 0; }
 `;
+
+/** The wiki in `list` that `url` is a page of. */
+export function siteOf(list: WikiSite[], url: string): WikiSite | undefined {
+  return list.find((w) => url.startsWith(w.articlePath.split("$1")[0])) ?? list.find((w) => url.startsWith(w.base + "/"));
+}
 
 const host = (url: string) => {
   try {
@@ -78,15 +86,81 @@ export function makeWiki(desk: DeskScrollApi) {
     desk.showPage(ROUTE);
   }
 
-  /** The game's wiki: the one picked before, else the best one found (remembered). */
+  // ---------- the wikis picked for each game ----------
+  // Synced with the server, so the website and other Decks use the same ones (Desk 0.4.0-beta.3 and later);
+  // older Desks keep one wiki per game in this Scroll's settings. The first wiki is the game's main one.
+
+  const synced = !!(desk.wiki.picked && desk.wiki.pick);
+  let picks: Record<string, WikiSite[]> = {};
+  let loadedAt = 0;
+  const listeners = new Set<() => void>();
+  const changed = () => listeners.forEach((fn) => fn());
+
+  async function loadPicks(refresh = false) {
+    if (!synced) {
+      picks = Object.fromEntries(Object.entries(settings().wikis ?? {}).map(([id, w]) => [id, [w]]));
+    } else {
+      const all = await desk.wiki.picked!(refresh);
+      picks = Object.fromEntries(Object.entries(all).map(([id, c]) => [id, c.wikis]));
+    }
+    loadedAt = Date.now();
+    changed();
+  }
+  /** Fresh picks from the server at most every 30 seconds (the website may have changed them). */
+  const freshen = () => {
+    if (Date.now() - loadedAt > 30_000) loadPicks(true).catch(() => loadPicks(false).catch(() => {}));
+  };
+
+  async function setWikis(appId: string, list: WikiSite[]) {
+    picks = { ...picks, [appId]: list };
+    changed();
+    if (synced) await desk.wiki.pick!(appId, list);
+    else {
+      const wikis = { ...settings().wikis };
+      if (list.length) wikis[appId] = list[0];
+      else delete wikis[appId];
+      await set({ wikis });
+    }
+  }
+  const wikisOf = (appId: string) => picks[appId] ?? [];
+  /** Adds a wiki to a game (or moves it to the front with `main`). */
+  const addWiki = (appId: string, w: WikiSite, main = false) => {
+    const rest = wikisOf(appId).filter((x) => x.base !== w.base);
+    return setWikis(appId, main || !synced ? [w, ...rest] : [...rest, w]);
+  };
+
+  /** React hook: a game's wikis, kept fresh. */
+  function useWikis(appId: string): WikiSite[] {
+    const [, bump] = useState(0);
+    useEffect(() => {
+      const fn = () => bump((n) => n + 1);
+      listeners.add(fn);
+      freshen();
+      return () => void listeners.delete(fn);
+    }, [appId]);
+    return wikisOf(appId);
+  }
+
+  /** Moves the wikis picked on this Deck before picks were synced into the synced picks (once). */
+  async function migrate() {
+    const old = settings().wikis;
+    if (!synced || !old || !Object.keys(old).length) return;
+    const all = await desk.wiki.picked!(true);
+    for (const [appId, w] of Object.entries(old)) if (!all[appId]?.wikis.length) await desk.wiki.pick!(appId, [w]);
+    await set({ wikis: {} });
+    await loadPicks(false);
+  }
+
+  /** The game's main wiki: the one picked before, else the best one found (remembered). */
   async function wikiFor(appId: string, gameName: string): Promise<WikiSite | null> {
-    const chosen = settings().wikis?.[appId];
+    if (!loadedAt) await loadPicks(true).catch(() => loadPicks(false));
+    const chosen = wikisOf(appId)[0];
     if (chosen) return chosen;
     if (!gameName) return null;
     const found = await desk.wiki.find(gameName);
     if (!found.length) return null;
     // Wikipedia is always found; a game wiki beats it, but it's better than nothing.
-    await set({ wikis: { ...settings().wikis, [appId]: found[0] } });
+    await setWikis(appId, [found[0]]);
     return found[0];
   }
 
@@ -109,13 +183,15 @@ export function makeWiki(desk: DeskScrollApi) {
 
   // ---------- picking a wiki ----------
 
-  const PickWiki: FC<{ appId: string; gameName: string; current?: WikiSite; onPicked: (w: WikiSite) => void; closeModal?: () => void }> = ({
+  /** Adds a wiki to the game: one found by its name, or a typed address. */
+  const AddWiki: FC<{ appId: string; gameName: string; current?: WikiSite; onPicked: (w: WikiSite) => void; closeModal?: () => void }> = ({
     appId,
     gameName,
     current,
     onPicked,
     closeModal,
   }) => {
+    const have = useWikis(appId);
     const [found, setFound] = useState<WikiSite[] | null>(null);
     const [error, setError] = useState<string | null>(null);
     useEffect(() => {
@@ -126,9 +202,9 @@ export function makeWiki(desk: DeskScrollApi) {
         .catch((e) => (setError(String(e?.message ?? e)), setFound([])));
     }, [gameName]);
     const pick = async (w: WikiSite) => {
-      await set({ wikis: { ...settings().wikis, [appId]: w } });
       closeModal?.();
       onPicked(w);
+      await addWiki(appId, w).catch((e) => toast("📖 Wiki", String(e?.message ?? e)));
     };
     const typed = async () => {
       const addr = await desk.askText("Wiki address", "e.g. eldenring.wiki.gg or a page on the wiki", current?.base ?? "");
@@ -142,11 +218,16 @@ export function makeWiki(desk: DeskScrollApi) {
     const { Line, Hint } = desk.bits;
     return (
       <ModalRoot className="dom-modal" onCancel={closeModal} closeModal={closeModal}>
-        <h2 style={{ marginTop: 0 }}>📖 Wiki{gameName ? ` for ${gameName}` : ""}</h2>
+        <h2 style={{ marginTop: 0 }}>{synced && have.length ? "＋ Add a wiki" : "📖 Wiki"}{gameName ? ` for ${gameName}` : ""}</h2>
         {!found && <Hint>Looking for wikis…</Hint>}
         {error && <Hint>⚠️ {error}</Hint>}
         {found?.map((w) => (
-          <Line key={w.home} icon={current?.home === w.home ? "✅" : "📖"} onOpen={() => pick(w)} okLabel="Use this wiki">
+          <Line
+            key={w.home}
+            icon={current?.base === w.base ? "✅" : have.some((x) => x.base === w.base) ? "☑️" : "📖"}
+            onOpen={() => pick(w)}
+            okLabel={have.some((x) => x.base === w.base) ? "Read this wiki" : synced && have.length ? "Add this wiki" : "Use this wiki"}
+          >
             <div style={{ fontWeight: 600 }}>{w.name}</div>
             <div style={{ fontSize: "12px", opacity: 0.6 }}>{host(w.base)}</div>
           </Line>
@@ -163,6 +244,61 @@ export function makeWiki(desk: DeskScrollApi) {
       </ModalRoot>
     );
   };
+
+  /** The game's wikis: read one, make one the main wiki, remove one, or add another. */
+  const GameWikis: FC<{ appId: string; gameName: string; current?: WikiSite; onPicked: (w: WikiSite) => void; closeModal?: () => void }> = ({
+    appId,
+    gameName,
+    current,
+    onPicked,
+    closeModal,
+  }) => {
+    const list = useWikis(appId);
+    const { Line, Hint } = desk.bits;
+    const fail = (e: any) => toast("📖 Wiki", String(e?.message ?? e));
+    const read = (w: WikiSite) => (closeModal?.(), onPicked(w));
+    const options = (w: WikiSite, i: number) =>
+      showContextMenu(
+        <Menu label={w.name}>
+          <MenuItem onSelected={() => read(w)}>Read this wiki</MenuItem>
+          {i > 0 && <MenuItem onSelected={() => addWiki(appId, w, true).catch(fail)}>Make it the main wiki</MenuItem>}
+          <MenuItem tone="destructive" onSelected={() => setWikis(appId, list.filter((x) => x.base !== w.base)).catch(fail)}>
+            Remove from {gameName || "this game"}
+          </MenuItem>
+        </Menu>
+      );
+    const add = () => showModal(<AddWiki appId={appId} gameName={gameName} current={current} onPicked={(w) => read(w)} />);
+    return (
+      <ModalRoot className="dom-modal" onCancel={closeModal} closeModal={closeModal}>
+        <h2 style={{ marginTop: 0 }}>📖 Wikis{gameName ? ` for ${gameName}` : ""}</h2>
+        <Hint>The first one is the main wiki: it opens first and the Wiki Tome searches it. Your Desk website uses the same ones.</Hint>
+        <div style={{ maxHeight: "45vh", overflowY: "auto", margin: "8px 0" }}>
+          {!list.length && <Hint>None picked yet.</Hint>}
+          {list.map((w, i) => (
+            <Line key={w.base} icon={current?.base === w.base ? "✅" : i === 0 ? "⭐" : "📖"} onOpen={() => options(w, i)} okLabel="Options">
+              <div style={{ fontWeight: 600 }}>
+                {w.name}
+                {i === 0 && list.length > 1 ? " · main" : ""}
+              </div>
+              <div style={{ fontSize: "12px", opacity: 0.6 }}>{host(w.base)}</div>
+            </Line>
+          ))}
+        </div>
+        <Focusable flow-children="row" style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+          <DialogButton style={s.primaryButton} onClick={add}>
+            ＋ Add a wiki
+          </DialogButton>
+          <DialogButton style={s.smallButton} onClick={() => closeModal?.()}>
+            Close
+          </DialogButton>
+        </Focusable>
+      </ModalRoot>
+    );
+  };
+
+  /** Where 📖 goes: the game's wikis, or straight to adding one on older Desks or when there are none. */
+  const ChangeWiki: FC<{ appId: string; gameName: string; current?: WikiSite; onPicked: (w: WikiSite) => void; closeModal?: () => void }> = (props) =>
+    synced && wikisOf(props.appId).length ? <GameWikis {...props} /> : <AddWiki {...props} />;
 
   // ---------- saving picked parts to a note ----------
 
@@ -278,7 +414,11 @@ export function makeWiki(desk: DeskScrollApi) {
     const conf = desk.settings.use<WikiSettings>();
     const textSize = conf.textSize ?? 17;
 
-    const [site, setSite] = useState<WikiSite | null>(conf.wikis?.[appId] ?? null);
+    const gameWikis = useWikis(appId);
+    const startUrl = target.view?.kind === "page" ? target.view.url : "";
+    const [site, setSite] = useState<WikiSite | null>(
+      (target.wiki && gameWikis.find((w) => w.base === target.wiki)) || (startUrl && siteOf(gameWikis, startUrl)) || gameWikis[0] || null
+    );
     const [view, setView] = useState<View | null>(target.view ?? null);
     const history = useRef<View[]>([]);
     const [error, setError] = useState<string | null>(null);
@@ -295,8 +435,16 @@ export function makeWiki(desk: DeskScrollApi) {
 
     // Where we are, for coming back with the combo or the radial.
     useEffect(() => {
-      last = { appId, gameName, view: view ?? undefined };
-    }, [view]);
+      last = { appId, gameName, view: view ?? undefined, wiki: site?.base };
+    }, [view, site?.base]);
+    // A wiki removed from the game (here or on another device) while reading it: back to the main one.
+    useEffect(() => {
+      if (site && gameWikis.length && !gameWikis.some((w) => w.base === site.base) && synced) {
+        setSite(gameWikis[0]);
+        history.current = [];
+        setView({ kind: "page", url: gameWikis[0].home });
+      }
+    }, [gameWikis.map((w) => w.base).join(" ")]);
 
     // The wiki: the game's chosen one, else find one. Without a game or a wiki, ask.
     useEffect(() => {
@@ -306,7 +454,9 @@ export function makeWiki(desk: DeskScrollApi) {
       }
       setLoading(true);
       wikiFor(appId, gameName)
-        .then((w) => {
+        .then((main) => {
+          const list = wikisOf(appId);
+          const w = (target.wiki && list.find((x) => x.base === target.wiki)) || (startUrl && siteOf(list, startUrl)) || main;
           if (w) {
             setSite(w);
             if (!viewRef.current) setView({ kind: "page", url: w.home });
@@ -326,19 +476,13 @@ export function makeWiki(desk: DeskScrollApi) {
       if (prev) setView(prev);
       else desk.page.close();
     };
-    const changeWiki = () =>
-      showModal(
-        <PickWiki
-          appId={appId}
-          gameName={gameName}
-          current={site ?? undefined}
-          onPicked={(w) => {
-            setSite(w);
-            history.current = [];
-            setView({ kind: "page", url: w.home });
-          }}
-        />
-      );
+    const readWiki = (w: WikiSite) => {
+      if (w.base === site?.base && view) return;
+      setSite(w);
+      history.current = [];
+      setView({ kind: "page", url: w.home });
+    };
+    const changeWiki = () => showModal(<ChangeWiki appId={appId} gameName={gameName} current={site ?? undefined} onPicked={readWiki} />);
     const search = async () => {
       const q = await desk.askText(`Search ${site?.name ?? "the wiki"}`, undefined, view?.kind === "search" ? view.q : "");
       if (q?.trim()) go({ kind: "search", q: q.trim() });
@@ -394,9 +538,13 @@ export function makeWiki(desk: DeskScrollApi) {
     // ---- links ----
 
     const follow = (url: string) => {
-      const title = site && wikiTitle(site, url);
-      if (title) go({ kind: "page", url });
-      else desk.openUrl(url);
+      if (site && wikiTitle(site, url)) return go({ kind: "page", url });
+      const other = siteOf(gameWikis, url); // a link to another of the game's wikis opens here too
+      if (other && wikiTitle(other, url)) {
+        setSite(other);
+        return go({ kind: "page", url });
+      }
+      desk.openUrl(url);
     };
 
     const visibleLinks = (): HTMLAnchorElement[] => {
@@ -561,7 +709,15 @@ export function makeWiki(desk: DeskScrollApi) {
           {picked.size > 0 && <MenuItem onSelected={save}>Add {picked.size} picked parts to a note…</MenuItem>}
           {picked.size > 0 && <MenuItem onSelected={() => setPicked(new Set())}>Unpick everything</MenuItem>}
           {isPage && <MenuItem onSelected={() => desk.openUrl(page!.url)}>Open in Desk's browser</MenuItem>}
-          <MenuItem onSelected={changeWiki}>Change wiki…</MenuItem>
+          {gameWikis.length > 1 &&
+            gameWikis
+              .filter((w) => w.base !== site?.base)
+              .map((w) => (
+                <MenuItem key={w.base} onSelected={() => readWiki(w)}>
+                  📖 Read {w.name}
+                </MenuItem>
+              ))}
+          <MenuItem onSelected={changeWiki}>{synced ? "Wikis for this game…" : "Change wiki…"}</MenuItem>
           <MenuItem onSelected={() => set({ textSize: Math.min(28, textSize + 2) })}>Bigger text</MenuItem>
           <MenuItem onSelected={() => set({ textSize: Math.max(12, textSize - 2) })}>Smaller text</MenuItem>
           <MenuItem tone="destructive" onSelected={() => desk.page.close()}>
@@ -631,7 +787,7 @@ export function makeWiki(desk: DeskScrollApi) {
             {error && !loading && (
               <div style={{ padding: "24px 0", fontSize: "15px" }}>
                 ⚠️ {error}
-                <Hint>Press X to search{site ? ` ${site.name}` : ""}, or Y for the menu (Change wiki…).</Hint>
+                <Hint>Press X to search{site ? ` ${site.name}` : ""}, or Y for the menu (other wikis).</Hint>
               </div>
             )}
 
@@ -696,5 +852,5 @@ export function makeWiki(desk: DeskScrollApi) {
     </DialogButton>
   );
 
-  return { WikiPage, openWiki, wikiFor, changeWikiModal: PickWiki };
+  return { WikiPage, openWiki, wikiFor, changeWikiModal: ChangeWiki, useWikis, setWikis, loadPicks, migrate, synced };
 }

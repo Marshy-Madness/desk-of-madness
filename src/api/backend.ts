@@ -1,5 +1,5 @@
 import { call } from "@decky/api";
-import { AchievementData, PlaySettings, PlayStats, DockerContainer, HomeEntity, NoteHit, DeskLayout, InstalledScroll, SteamNewsItem, WorkshopScroll, WorkshopEntry, WorkshopGame, WorkshopPack, WorkshopSummary, WorkshopUser, ServerUser, Share, BackupStatus, Counter, DeletedNote, Folder, NoteVersion, LeftOff, Game, GameSummary, Note, Recording, Screenshot, Settings, SteamScreenshot, ReaderPage, ReaderCacheSettings, WikiSite, WikiResult } from "../types";
+import { AchievementData, PlaySettings, PlayStats, DockerContainer, HomeEntity, NoteHit, DeskLayout, InstalledScroll, SteamNewsItem, WorkshopScroll, WorkshopEntry, WorkshopGame, WorkshopPack, WorkshopSummary, WorkshopUser, ServerUser, Share, BackupStatus, Counter, DeletedNote, Folder, NoteVersion, LeftOff, Game, GameSummary, Note, Recording, Screenshot, Settings, SteamScreenshot, ReaderPage, ReaderCacheSettings, WikiSite, WikiResult, WikiChoice } from "../types";
 
 export const backend = {
   importNotice: () => call<[], { from: string } | null>("import_notice"),
@@ -70,6 +70,8 @@ export const backend = {
   wikiFind: (name: string) => call<[string], WikiSite[]>("wiki_find", name),
   wikiSite: (url: string) => call<[string], WikiSite>("wiki_site", url),
   wikiSearch: (wiki: string, q: string) => call<[string, string], WikiResult[]>("wiki_search", wiki, q),
+  wikiChoices: (refresh = false) => call<[boolean], Record<string, WikiChoice>>("wiki_choices", refresh),
+  wikiChoose: (appId: string, wikis: WikiSite[]) => call<[string, WikiSite[]], WikiChoice>("wiki_choose", appId, wikis),
   /** null when there's no server or this account isn't an admin on it. */
   readerSettings: () => call<[], ReaderCacheSettings | null>("reader_settings"),
   setReaderCacheDays: (days: number) => call<[number], ReaderCacheSettings>("set_reader_cache_days", days),

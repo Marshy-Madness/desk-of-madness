@@ -11,6 +11,7 @@ import urllib.request
 
 import decky
 import storage
+import wiki
 
 STATE_PATH = os.path.join(decky.DECKY_PLUGIN_SETTINGS_DIR, "sync_state.json")
 CHANGE_DELAY_SEC = 20  # after a local edit, wait this long for more edits before syncing
@@ -139,6 +140,8 @@ class Sync:
             pulled += 1
         if self._sync_achievements(state):
             pulled += 1
+        if self._sync_wiki_choices(state):
+            pulled += 1
         self._refresh_account(state)
         state["lastSync"] = int(time.time() * 1000)
         state["lastError"] = None
@@ -198,6 +201,21 @@ class Sync:
         with open(path, "rb") as f:
             state["achievementsHash"] = hashlib.sha256(f.read()).hexdigest()
         return changed
+
+    def _sync_wiki_choices(self, state: dict) -> bool:
+        """The wikis picked for each game: send ours, keep the merged set (per game the newer pick wins)."""
+        mine = storage.load_wiki_choices()
+        try:
+            merged = (self._request("PUT", "/api/wikis", {"games": mine}) or {}).get("games") or {}
+        except RuntimeError as e:
+            if "404" in str(e) or "405" in str(e):  # older server
+                return False
+            raise
+        merged = wiki.merge_choices(mine, merged)
+        if merged == mine:
+            return False
+        storage.save_wiki_choices(merged, notify=False)
+        return True
 
     # ---- speech to text (the server owner turns it on per account) ----
 

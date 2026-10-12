@@ -549,6 +549,7 @@ async function openGame(appId) {
   $("#games").querySelectorAll("button").forEach((b) => b.classList.toggle("active", b.dataset.id === appId));
   if (!$("#gamePicker").querySelector(`option[value="${CSS.escape(appId)}"]`)) loadGames(); else $("#gamePicker").value = appId;
   render();
+  loadWikiPicks().then((changed) => changed && game?.appId === appId && !inHome && render()).catch(() => {});
 }
 
 /** Phones: back from a game to the game list. */
@@ -788,11 +789,11 @@ function tomeBody(id) {
   }
   if (id === "pinned-notes") return game.notes.filter((n) => n.pinned).sort(byUpdated).map(noteLine).join("") || '<div class="meta">No pinned notes.</div>';
   if (id === "wiki") {
-    const w = wikiConf().wikis?.[game.appId];
+    const [w, ...more] = wikisOf(game.appId);
     const recent = (wikiConf().recent?.[game.appId] || []).slice(0, 4);
     return `<form class="toolbar wksearch" style="margin:0 0 6px"><input placeholder="Search ${esc(w?.name || "the wiki")}…" style="flex:1;min-width:0"><button class="primary">🔍</button></form>` +
       recent.map((r) => line("📄", "", esc(r.title), `data-wiki="${esc(r.url)}"`)).join("") +
-      `<div class="toolbar"><button data-wiki="">${w ? `📖 ${esc(w.name)}` : "📖 Open the wiki"}</button></div>` +
+      `<div class="toolbar"><button data-wiki="">${w ? `📖 ${esc(w.name)}` : "📖 Open the wiki"}</button>${more.map((x) => `<button data-wiki-site="${esc(x.base)}">📖 ${esc(x.name)}</button>`).join("")}</div>` +
       '<div class="meta">Read without ads, then pick parts (or highlight text) to save into a note.</div>';
   }
   if (id === "workshop") return workshopUrl ? `<div class="meta">Community books for ${esc(game.name)}.</div><div class="toolbar"><a href="${esc(workshopUrl)}/?game=${encodeURIComponent(game.appId)}&name=${encodeURIComponent(game.name)}" target="_blank" rel="noopener"><button class="primary">🏭 Open in the Madness Workshop</button></a></div>` : '<div class="meta">No Workshop set up on this server.</div>';
@@ -863,6 +864,7 @@ function renderDesk() {
     cnt.count += by; cnt.sessionCount = Math.max(0, (cnt.sessionCount || 0) + by); cnt.updatedAt = Date.now(); save();
   }));
   c.querySelectorAll("[data-wiki]").forEach((el) => (el.onclick = () => wikiDialog(el.dataset.wiki ? { page: el.dataset.wiki } : null).then((d) => d && d.addEventListener("close", renderDesk))));
+  c.querySelectorAll("[data-wiki-site]").forEach((el) => (el.onclick = () => wikiDialog({ wiki: el.dataset.wikiSite }).then((d) => d && d.addEventListener("close", renderDesk))));
   c.querySelectorAll("form.wksearch").forEach((f) => (f.onsubmit = (e) => { e.preventDefault(); const q = f.querySelector("input").value.trim(); if (q) wikiDialog({ search: q }).then((d) => d && d.addEventListener("close", renderDesk)); }));
   c.querySelectorAll("[data-rf]").forEach((b) => (b.onclick = () => { recentFilter = b.dataset.rf; renderDesk(); }));
   c.querySelectorAll("[data-guides]").forEach((b) => (b.onclick = () => { folderFilter = "guides"; gameView = "notes"; localStorage.setItem("dom-view", "notes"); render(); }));
@@ -871,18 +873,43 @@ function renderDesk() {
 }
 
 // ---------- 📖 Wiki: a game's wiki in the reader view (made and kept by this server), with parts saved into notes ----------
-// The same as the Deck's Wiki Scroll (scrolls/wiki). Wikis picked and pages read are kept in this browser (dom-wiki).
+// The same as the Deck's Wiki Scroll (scrolls/wiki). The wikis picked for each game live on the server (/api/wikis),
+// shared with the Deck; a game can have several, the first is its main one. Pages read are kept in this browser (dom-wiki).
 const wikiConf = () => { try { return JSON.parse(localStorage.getItem("dom-wiki") || "{}"); } catch { return {}; } };
 const setWikiConf = (patch) => localStorage.setItem("dom-wiki", JSON.stringify({ ...wikiConf(), ...patch }));
 const wikiHost = (url) => { try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url; } };
 
-/** The game's wiki: the one picked before, else the best one found (remembered). */
+let wikiPicks = {}, wikiPicksAt = 0;
+const wikisOf = (appId) => wikiPicks[appId]?.wikis || [];
+const wikiSiteOf = (list, url) => list.find((w) => url.startsWith(w.articlePath.split("$1")[0])) || list.find((w) => url.startsWith(w.base + "/"));
+/** Fetches the picks (at most every 30 s unless forced). True if they changed. */
+async function loadWikiPicks(force = false) {
+  if (!force && Date.now() - wikiPicksAt < 30000) return false;
+  const old = wikiConf().wikis;  // picked in this browser before picks were synced: send them once
+  const body = old && Object.keys(old).length
+    ? { method: "PUT", json: { games: Object.fromEntries(Object.entries(old).map(([id, w]) => [id, { wikis: [w], at: 1 }])) } } : {};
+  const { games } = await api("/api/wikis", body);
+  if (body.method) setWikiConf({ wikis: undefined });
+  wikiPicksAt = Date.now();
+  const changed = JSON.stringify(games) !== JSON.stringify(wikiPicks);
+  wikiPicks = games;
+  return changed;
+}
+/** Sets a game's wikis, in order (first = main); [] forgets them. */
+async function setGameWikis(appId, list) {
+  wikiPicks = { ...wikiPicks, [appId]: { wikis: list, at: Date.now() } };
+  const { games } = await api("/api/wikis", { method: "PUT", json: { games: { [appId]: wikiPicks[appId] } } });
+  wikiPicks = games; wikiPicksAt = Date.now();
+}
+
+/** The game's main wiki: the one picked before, else the best one found (remembered). */
 async function wikiFor(appId, name) {
-  const chosen = wikiConf().wikis?.[appId];
+  await loadWikiPicks().catch(() => {});
+  const chosen = wikisOf(appId)[0];
   if (chosen) return chosen;
   const { wikis } = await api(`/api/wiki/find?name=${encodeURIComponent(name)}`);
   if (!wikis.length) return null;
-  setWikiConf({ wikis: { ...wikiConf().wikis, [appId]: wikis[0] } });
+  await setGameWikis(appId, [wikis[0]]);
   return wikis[0];
 }
 
@@ -995,14 +1022,14 @@ function wkText(el, depth = 0) {
 }
 const wkClean = (t) => t.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 
-/** The wiki reader. `view`: {page: url} | {search: q} | nothing for the wiki's main page. */
+/** The wiki reader. `view`: {page: url} | {search: q} | {wiki: base} for that wiki's main page | nothing for the main wiki's. */
 async function wikiDialog(view) {
   const appId = game.appId, gameName = game.name;
   const dlg = document.createElement("dialog");
   dlg.className = "wide wikidlg";
   dlg.innerHTML = `<div class="toolbar wkbar">
       <button id="wkBack" class="icon" title="Back">←</button>
-      <button id="wkSite" title="Change wiki">📖 <span>Wiki</span></button>
+      <button id="wkSite" title="This game's wikis">📖 <span>Wiki</span></button>
       <form id="wkForm" style="flex:1;display:flex;min-width:0"><input id="wkQ" type="search" placeholder="Search the wiki…" style="flex:1;min-width:0"></form>
       <button id="wkSel" title="Pick parts of the page for a note">✂<span class="hide-sm"> Select</span></button>
       <button id="wkClose" class="icon" title="Close">✕</button></div>
@@ -1076,20 +1103,29 @@ async function wikiDialog(view) {
     }
     const a = e.target.closest("a[data-href]"); if (!a) return;
     e.preventDefault();
+    const other = wikiSiteOf(wikisOf(appId), a.dataset.href);
     if (site && wikiTitle(site, a.dataset.href)) show({ page: a.dataset.href });
+    else if (other && wikiTitle(other, a.dataset.href)) { useSite(other); show({ page: a.dataset.href }); }
     else window.open(a.dataset.href, "_blank", "noopener");
   };
 
-  const pickWiki = async () => {
+  const useSite = (w) => { site = w; $("#wkSite span", dlg).textContent = w.name; $("#wkQ", dlg).placeholder = `Search ${w.name}…`; };
+  const readWiki = (w) => { useSite(w); history.length = 0; cur = null; show({ page: w.home }); };
+
+  /** Adds a wiki to the game: one found by its name, or a typed address. */
+  const addWiki = async (then) => {
+    const have = wikisOf(appId);
     const pd = document.createElement("dialog");
-    pd.innerHTML = `<h3 style="margin-top:0">📖 Wiki for ${esc(gameName)}</h3><div id="pwList"><p class="meta">Looking for wikis…</p></div>
-      <label>Or type a wiki's address</label><form id="pwForm" class="toolbar"><input id="pwAddr" placeholder="e.g. eldenring.wiki.gg" style="flex:1"><button class="primary">Use it</button></form>
+    pd.innerHTML = `<h3 style="margin-top:0">${have.length ? "＋ Add a wiki" : "📖 Wiki"} for ${esc(gameName)}</h3><div id="pwList"><p class="meta">Looking for wikis…</p></div>
+      <label>Or type a wiki's address</label><form id="pwForm" class="toolbar"><input id="pwAddr" placeholder="e.g. eldenring.wiki.gg" style="flex:1"><button class="primary">Add it</button></form>
       <div class="actions toolbar"><span style="flex:1"></span><button id="pwCancel">Cancel</button></div>`;
-    document.body.appendChild(pd); pd.showModal();
-    const done = (w) => {
-      setWikiConf({ wikis: { ...wikiConf().wikis, [appId]: w } });
+    dlg.appendChild(pd); pd.showModal();
+    const done = async (w) => {
       pd.close(); pd.remove();
-      site = w; $("#wkSite span", dlg).textContent = w.name; history.length = 0; cur = null; show({ page: w.home });
+      if (!have.some((x) => x.base === w.base)) {
+        try { await setGameWikis(appId, [...wikisOf(appId).filter((x) => x.base !== w.base), w]); } catch (err) { alert(err.message); }
+      }
+      readWiki(w); if (then) then();
       if (dlg.onWikiChanged) dlg.onWikiChanged();
     };
     $("#pwCancel", pd).onclick = () => { pd.close(); pd.remove(); };
@@ -1099,9 +1135,37 @@ async function wikiDialog(view) {
     };
     try {
       const { wikis } = await api(`/api/wiki/find?name=${encodeURIComponent(gameName)}`);
-      $("#pwList", pd).innerHTML = wikis.map((w, i) => line(site?.home === w.home ? "✅" : "📖", "", `${esc(w.name)}<div class="meta">${esc(wikiHost(w.base))}</div>`, `data-w="${i}"`)).join("") || '<p class="meta">No wiki found by name. Type its address below.</p>';
+      $("#pwList", pd).innerHTML = wikis.map((w, i) => line(site?.base === w.base ? "✅" : have.some((x) => x.base === w.base) ? "☑️" : "📖", "", `${esc(w.name)}<div class="meta">${esc(wikiHost(w.base))}${have.some((x) => x.base === w.base) ? " · already added" : ""}</div>`, `data-w="${i}"`)).join("") || '<p class="meta">No wiki found by name. Type its address below.</p>';
       pd.querySelectorAll("[data-w]").forEach((el) => (el.onclick = () => done(wikis[+el.dataset.w])));
     } catch (err) { $("#pwList", pd).innerHTML = `<p class="meta">⚠️ ${esc(err.message)}</p>`; }
+  };
+
+  /** The game's wikis: read one, make one the main wiki, remove one, or add another. */
+  const pickWiki = async () => {
+    await loadWikiPicks(true).catch(() => {});
+    if (!wikisOf(appId).length) return addWiki();
+    const pd = document.createElement("dialog");
+    dlg.appendChild(pd); pd.showModal();
+    const close = () => { pd.close(); pd.remove(); };
+    const paint = () => {
+      const list = wikisOf(appId);
+      pd.innerHTML = `<h3 style="margin-top:0">📖 Wikis for ${esc(gameName)}</h3>
+        <p class="meta">The first one is the main wiki: it opens first and the Wiki Tome searches it. Your Deck uses the same ones.</p>
+        ${list.map((w, i) => `<div class="toolbar" style="align-items:center;margin:6px 0">
+          <button data-read="${i}" style="flex:1;min-width:0;text-align:left" class="${site?.base === w.base ? "primary" : ""}">${i === 0 ? "⭐" : "📖"} ${esc(w.name)} <span class="meta">${esc(wikiHost(w.base))}</span></button>
+          ${i ? `<button class="icon" data-main="${i}" title="Make it the main wiki">⭐</button>` : ""}<button class="icon" data-del="${i}" title="Remove from ${esc(gameName)}">✕</button></div>`).join("") || '<p class="meta">None picked.</p>'}
+        <div class="actions toolbar"><button id="pwAdd" class="primary">＋ Add a wiki</button><span style="flex:1"></span><button id="pwClose">Close</button></div>`;
+      $("#pwClose", pd).onclick = close;
+      $("#pwAdd", pd).onclick = () => addWiki(close);
+      const change = (next) => setGameWikis(appId, next).then(() => { paint(); if (dlg.onWikiChanged) dlg.onWikiChanged(); }).catch((err) => alert(err.message));
+      pd.querySelectorAll("[data-read]").forEach((b) => (b.onclick = () => { close(); readWiki(list[+b.dataset.read]); }));
+      pd.querySelectorAll("[data-main]").forEach((b) => (b.onclick = () => { const w = list[+b.dataset.main]; change([w, ...list.filter((x) => x !== w)]); }));
+      pd.querySelectorAll("[data-del]").forEach((b) => (b.onclick = () => {
+        const w = list[+b.dataset.del], rest = list.filter((x) => x !== w);
+        change(rest).then(() => { if (site?.base === w.base && rest[0]) readWiki(rest[0]); });
+      }));
+    };
+    paint();
   };
 
   const addToNote = () => {
@@ -1145,9 +1209,9 @@ async function wikiDialog(view) {
   $("#wkAdd", dlg).onclick = addToNote;
 
   try { site = await wikiFor(appId, gameName); } catch (err) { body.innerHTML = `<p>⚠️ ${esc(err.message)}</p>`; }
-  if (!site) { if (!body.textContent.trim()) body.innerHTML = '<p class="meta">No wiki found by name.</p>'; return pickWiki(); }
-  $("#wkSite span", dlg).textContent = site.name;
-  $("#wkQ", dlg).placeholder = `Search ${site.name}…`;
+  if (!site) { if (!body.textContent.trim()) body.innerHTML = '<p class="meta">No wiki found by name.</p>'; addWiki(); return dlg; }
+  const list = wikisOf(appId);
+  useSite((view?.wiki && list.find((w) => w.base === view.wiki)) || (view?.page && wikiSiteOf(list, view.page)) || site);
   show(view?.page ? { page: view.page } : view?.search ? { search: view.search } : { page: site.home });
   return dlg;
 }

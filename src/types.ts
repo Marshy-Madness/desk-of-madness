@@ -389,6 +389,14 @@ export interface ReaderPage {
 }
 
 /** A MediaWiki site (Fandom, wiki.gg, Wikipedia…), for the 📖 Wiki Scroll. */
+/** The wikis picked for a game, synced between devices; the newer pick wins. */
+export interface WikiChoice {
+  /** First = the game's main wiki; empty = none picked. */
+  wikis: WikiSite[];
+  /** When it was picked (ms). */
+  at: number;
+}
+
 export interface WikiSite {
   /** https://host[/lang] */
   base: string;

@@ -146,6 +146,8 @@ function makeApi(scroll: InstalledScroll, r: Running): DeskScrollApi {
       find: (name) => backend.wikiFind(name),
       site: (url) => backend.wikiSite(url),
       search: (wiki, q) => backend.wikiSearch(wiki, q),
+      picked: (refresh) => backend.wikiChoices(!!refresh),
+      pick: (appId, wikis) => backend.wikiChoose(appId, wikis),
     },
     runningGame: getRunningGame,
     useRunningGame,

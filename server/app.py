@@ -135,6 +135,35 @@ class Store:
     def aliases_of(self, appid: str) -> list:
         return sorted(a for a, c in self.aliases().items() if c == appid)
 
+    # The wikis picked for each game (📖 Wiki), shared by the Deck and the website. Kept under main IDs; handed out
+    # under every ID of a game too, so a device finds them under the one it knows.
+    def wiki_choices(self) -> dict:
+        try:
+            with open(os.path.join(self.root, "wiki_choices.json")) as f:
+                stored = json.load(f)
+        except (OSError, ValueError):
+            stored = {}
+        out = dict(stored)
+        for alias, main in self.aliases().items():
+            if main in stored:
+                out[alias] = stored[main]
+        return out
+
+    def put_wiki_choices(self, incoming: dict) -> dict:
+        with write_lock:
+            path = os.path.join(self.root, "wiki_choices.json")
+            try:
+                with open(path) as f:
+                    stored = json.load(f)
+            except (OSError, ValueError):
+                stored = {}
+            canon = {}
+            for appid, c in (incoming or {}).items() if isinstance(incoming, dict) else []:
+                main = self.canon(safe(str(appid)))
+                canon = wiki.merge_choices(canon, {main: c})
+            self._save_json(path, wiki.merge_choices(stored, canon))
+        return self.wiki_choices()
+
     def game_path(self, appid: str) -> str:
         return os.path.join(self.root, "games", f"{self.canon(appid)}.json")
 
@@ -840,6 +869,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(422, {"error": str(err)})
             except Exception as err:
                 return self.send(502, {"error": f"Couldn't make a reader view: {err}"})
+        if p[1:] == ["wikis"]:  # GET /api/wikis: the wikis picked for each game ({games: {appId: {wikis, at}}})
+            return self.send(200, {"games": store.wiki_choices()})
         if len(p) == 3 and p[1] == "wiki" and p[2] in ("find", "site", "search"):  # the 📖 Wiki Scroll
             q = self.query()
             try:
@@ -1399,6 +1430,8 @@ class Handler(BaseHTTPRequestHandler):
             if not user:
                 return self.send(401, {"error": "unauthorized"})
             store = Store(user["id"])
+            if p == ["api", "wikis"]:  # PUT {games: {appId: {wikis, at}}}: newer picks win; answers with all of them
+                return self.send(200, {"games": store.put_wiki_choices((self.json_body() or {}).get("games"))})
             if p == ["api", "achievements"]:  # the Deck's achievements; answers with the merged result
                 return self.send(200, achievements.public(achievements.put(store.root, self.json_body())))
             if len(p) == 3 and p[:2] == ["api", "games"]:  # older plugin builds

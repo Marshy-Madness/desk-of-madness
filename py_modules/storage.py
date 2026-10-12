@@ -178,6 +178,29 @@ def all_sessions() -> list:
     return out
 
 
+WIKI_CHOICES_PATH = os.path.join(decky.DECKY_PLUGIN_SETTINGS_DIR, "wiki_choices.json")
+
+
+def load_wiki_choices() -> dict:
+    """The wikis picked for each game (📖 Wiki): {appId: {"wikis": [...], "at": ms}}, synced with the server."""
+    try:
+        with open(WIKI_CHOICES_PATH) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def save_wiki_choices(data: dict, notify: bool = True) -> dict:
+    tmp = WIKI_CHOICES_PATH + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(data, f)
+    os.replace(tmp, WIKI_CHOICES_PATH)
+    if notify:
+        for fn in _dirty_listeners:
+            fn()
+    return data
+
+
 ACHIEVEMENTS_PATH = os.path.join(decky.DECKY_PLUGIN_SETTINGS_DIR, "achievements.json")
 
 
