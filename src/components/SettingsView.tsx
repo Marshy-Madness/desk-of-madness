@@ -218,6 +218,33 @@ export const SettingsView: FC = () => {
             </PanelSectionRow>
           )}
 
+          <Heading>Play time</Heading>
+          <PanelSectionRow>
+            <ToggleField
+              label="Count non-Steam games"
+              description="Emulators and other shortcuts count toward play time, streaks and games played today."
+              checked={settings.play?.includeNonSteam !== false}
+              onChange={(v) => updateSettings({ play: { ...settings.play, includeNonSteam: v } })}
+            />
+          </PanelSectionRow>
+          <PanelSectionRow>
+            <DropdownItem
+              label="A new day starts at"
+              description="Late-night sessions count toward the day before."
+              rgOptions={[0, 2, 3, 4, 5, 6].map((h) => ({ label: h === 0 ? "Midnight" : `${h} AM`, data: h }))}
+              selectedOption={settings.play?.dayStartHour ?? 4}
+              onChange={(o) => updateSettings({ play: { ...settings.play, dayStartHour: o.data } })}
+            />
+          </PanelSectionRow>
+          <PanelSectionRow>
+            <DropdownItem
+              label="Shortest session that counts"
+              rgOptions={[1, 2, 5, 10, 15].map((m) => ({ label: `${m} min`, data: m }))}
+              selectedOption={settings.play?.minMinutes ?? 5}
+              onChange={(o) => updateSettings({ play: { ...settings.play, minMinutes: o.data } })}
+            />
+          </PanelSectionRow>
+
           <Heading>Tomes</Heading>
           <PanelSectionRow>
             <TomeList />
