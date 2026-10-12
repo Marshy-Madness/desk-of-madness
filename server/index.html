@@ -113,6 +113,13 @@
   .version { background: #262b35; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; display: flex; gap: 10px; align-items: center; }
   .version:hover { background: #2e3440; } .version .text { flex: 1; min-width: 0; }
   .preview { background: #171a20; border-radius: 8px; padding: 12px; white-space: pre-wrap; max-height: 45vh; overflow-y: auto; margin: 10px 0; }
+  .preview.reading { max-height: none; overflow: visible; font-size: 15px; line-height: 1.45; }
+  .reading img { display: block; max-width: 100%; max-height: 70vh; border-radius: 6px; margin: 6px 0; cursor: zoom-in; }
+  .reading a { color: #59bfff; word-break: break-all; }
+  .viewcheck { display: flex; align-items: center; gap: 8px; padding: 6px 0; } .viewcheck.done span { text-decoration: line-through; opacity: .6; }
+  dialog.lightbox { width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; border-radius: 0; background: #000; cursor: zoom-out; }
+  dialog.lightbox::backdrop { background: #000; }
+  dialog.lightbox img { width: 100%; height: 100%; object-fit: contain; display: block; }
   button.recording { background: var(--danger); border-color: var(--danger); color: #fff; }
   .labelrow { display: flex; align-items: flex-end; gap: 8px; } .labelrow label { flex: 1; } .labelrow button { margin-bottom: 4px; }
   .said { font-size: 13px; background: #171a20; border-radius: 6px; padding: 6px 10px; margin: 0 0 8px; white-space: pre-wrap; }
@@ -551,7 +558,7 @@ function render() {
     game.folders = game.folders.filter((x) => x !== f); tombstone(f.id);
     folderFilter = "all"; save();
   };
-  $("#content").querySelectorAll(".card:not(.shared)").forEach((c) => (c.onclick = () => editNote(game.notes.find((n) => n.id === c.dataset.id))));
+  $("#content").querySelectorAll(".card:not(.shared)").forEach((c) => (c.onclick = () => viewNote(game.notes.find((n) => n.id === c.dataset.id))));
   $("#content").querySelectorAll(".card.shared").forEach((c) => (c.onclick = () => viewShared(sharedHere.find((s) => s.shareId === c.dataset.share))));
 }
 
@@ -691,7 +698,7 @@ function renderDesk() {
     const target = vis[vis.indexOf(id) + Number(by)]; if (!target) return;
     const a = n.order.indexOf(id), t = n.order.indexOf(target); [n.order[a], n.order[t]] = [n.order[t], n.order[a]];
   })));
-  c.querySelectorAll("[data-note]").forEach((el) => (el.onclick = () => editNote(game.notes.find((n) => n.id === el.dataset.note))));
+  c.querySelectorAll("[data-note]").forEach((el) => (el.onclick = () => viewNote(game.notes.find((n) => n.id === el.dataset.note))));
   c.querySelectorAll("[data-new]").forEach((el) => (el.onclick = () => editNote(null)));
   c.querySelectorAll("[data-leftoff]").forEach((el) => (el.onclick = () => {
     const text = prompt("Where did you leave off?", game.leftOff?.text ?? ""); if (text === null) return;
@@ -1522,7 +1529,66 @@ function editNote(original, draft = {}) {
   };
 
   draw();
-  dlg.showModal();
+  if (!dlg.open) dlg.showModal(); // already open when coming from viewNote
+}
+
+/** Read a note the way the Deck shows it: [img:N] tags become the screenshots, links are tappable. */
+function viewNote(note) {
+  const dlg = $("#editor");
+  const n = note;
+  const k = kindOf(n.kind);
+  const full = (sh) => mediaUrl(game.appId, sh.file);
+  const used = new Set();
+  const body = esc(n.body || "")
+    .replace(/(https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]])/g, '<a href="$1" target="_blank" rel="noopener">$1</a>')
+    .replace(/\n?\[img:(\d+)\]\n?/g, (_, i) => {
+      const sh = n.screenshots?.[i - 1];
+      if (!sh) return "";
+      used.add(i - 1);
+      return `<img src="${full(sh)}" loading="lazy" alt="Screenshot ${i}">`;
+    });
+  const rest = (n.screenshots || []).map((sh, i) => ({ sh, i })).filter(({ i }) => !used.has(i));
+  const chips = [n.kind && n.kind !== "note" ? `${k[1]} ${k[2]}` : "", n.folderId ? `📁 ${folderPath(n.folderId)}` : "",
+    n.launchNumber ? `Launch #${n.launchNumber}` : "", ...(n.tags || []).map((t) => "#" + t)].filter(Boolean);
+  dlg.innerHTML = `
+    <h2 style="margin-top:0">${n.pinned ? "📌 " : ""}${n.spoiler ? "🙈 " : ""}${esc(n.title)}</h2>
+    ${chips.map((c) => `<span class="chip">${esc(c)}</span>`).join("")}<span class="meta">Edited ${esc(date(n.updatedAt))}</span>
+    ${n.spoiler ? '<p class="meta" id="vHint">Spoiler: tap to reveal.</p>' : ""}
+    <div id="vBody" class="${n.spoiler ? "spoiler" : ""}">
+      ${body.trim() ? `<div class="preview reading">${body}</div>` : ""}
+      ${(n.checklist || []).map((c, i) => `<label class="viewcheck ${c.done ? "done" : ""}"><input type="checkbox" data-vcheck="${i}" ${c.done ? "checked" : ""}><span>${esc(c.text)}</span></label>`).join("")}
+      ${rest.length ? `<label>${used.size ? "More screenshots" : "Screenshots"}</label><div class="shots">${rest.map(({ sh, i }) => `<div class="shot"><img data-full="${full(sh)}" src="${mediaUrl(game.appId, sh.thumb || sh.file)}" loading="lazy" alt="Screenshot ${i + 1}"></div>`).join("")}</div>` : ""}
+      ${(n.recordings || []).map((r) => `<div class="toolbar" style="margin:4px 0"><audio controls preload="none" src="${mediaUrl(game.appId, r.file)}"></audio><span class="meta">${r.durationSec ? Math.round(r.durationSec) + "s · " : ""}${esc(date(r.createdAt))}</span></div>
+        ${r.transcript ? `<div class="said"><span class="meta">🎙 said:</span>${esc(r.transcript)}</div>` : ""}`).join("")}
+      ${!body.trim() && !n.checklist?.length && !n.screenshots?.length && !n.recordings?.length ? '<p class="meta">(no information)</p>' : ""}
+    </div>
+    <div class="toolbar actions"><button class="primary" id="vEdit">✏️ Edit</button><button id="vClose">Close</button></div>`;
+  const vb = $("#vBody", dlg);
+  vb.onclick = (e) => {
+    if (vb.classList.contains("spoiler")) { vb.classList.remove("spoiler"); $("#vHint", dlg)?.remove(); e.preventDefault(); return; }
+    const img = e.target.closest("img");
+    if (!img) return;
+    const box = document.createElement("dialog");
+    box.className = "lightbox";
+    box.innerHTML = `<img src="${esc(img.dataset.full || img.src)}" alt="">`;
+    box.onclick = () => box.close();
+    box.onclose = () => box.remove();
+    document.body.appendChild(box); box.showModal();
+  };
+  dlg.querySelectorAll("[data-vcheck]").forEach((el) => (el.onchange = () => {
+    const i = game.notes.findIndex((x) => x.id === n.id);
+    if (i < 0) return;
+    const copy = structuredClone(game.notes[i]);
+    copy.checklist[+el.dataset.vcheck].done = el.checked;
+    copy.updatedAt = Date.now();
+    game.notes[i] = copy;
+    el.closest(".viewcheck").classList.toggle("done", el.checked);
+    save();
+  }));
+  $("#vClose", dlg).onclick = () => dlg.close();
+  $("#vEdit", dlg).onclick = () => editNote(game.notes.find((x) => x.id === n.id) || n);
+  dlg.onclose = null;
+  if (!dlg.open) dlg.showModal();
 }
 
 // ---------- people: sharing, shared notes, account ----------
@@ -2145,7 +2211,7 @@ async function checkBookstoreImport() {
     await loadGames();
     await openGame(r.appId);
     const note = game.notes.find((n) => n.id === r.note.id);
-    if (note) editNote(note);
+    if (note) viewNote(note);
     if (r.existing) alert(`You already have "${r.note.title}" in your notes for ${r.gameName}.`);
   } catch (err) { alert("Couldn't copy from the Madness Workshop: " + err.message); }
 }
