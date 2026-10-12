@@ -25,7 +25,9 @@ import zipfile
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+import achievements
 import merge
+import playstats
 import reader_cache
 import speech
 import controls
@@ -851,6 +853,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(422, {"error": str(err)})
             except Exception as err:
                 return self.send(502, {"error": f"Couldn't reach the wiki: {err}"})
+        if p[1:] == ["achievements"]:  # GET /api/achievements[?refresh=1]: Steam achievements (Deck sync + Web API)
+            force = self.query().get("refresh") == "1"
+            achievements.refresh_later(store.root, user.get("steamId"), force)
+            data = achievements.public(achievements.load(store.root))
+            return self.send(200, {**data, "refreshing": store.root in achievements._running, "steamLinked": bool(user.get("steamId"))})
+        if p[1:] == ["stats", "play"]:  # GET /api/stats/play?tz=&dayStart=&min=&nonSteam=: the session Tomes' numbers
+            return self.send(200, self.play_stats(store))
         if p[1:] == ["games"]:
             return self.send(200, self.list_games(store))
         if len(p) == 3 and p[1] == "games":
@@ -971,6 +980,30 @@ class Handler(BaseHTTPRequestHandler):
                 os.remove(path)
             return None
         return self.send(404, {"error": "not found"})
+
+    def play_stats(self, store: Store) -> dict:
+        q = self.query()
+        games = []
+        for appid in store.appids():
+            g, _ = store.read(appid)
+            if g:
+                games.append({"appId": g.get("appId") or appid, "name": g.get("name"), "sessions": g.get("sessions") or []})
+        # The server can't see what's running: a session still open from the last 12 hours is taken as live.
+        cutoff = now_ms() - 12 * 3600 * 1000
+        open_ = [(s["start"], g["appId"]) for g in games for s in g["sessions"] if s.get("end") is None and (s.get("start") or 0) > cutoff]
+        stats = playstats.stats(games, tz_offset_min=int(q.get("tz") or 0), day_start_hour=int(q.get("dayStart") or 4),
+                                min_seconds=int(q.get("min") or 5) * 60, include_non_steam=q.get("nonSteam") != "0",
+                                running_app_id=max(open_)[1] if open_ else None)
+        # All time from Steam's own playtime, when the Web API has it.
+        ach = achievements.load(store.root)
+        playtime, names = ach.get("playtime") or {}, ach.get("names") or {}
+        if not playtime:
+            playtime = {a: g.get("playtimeMin") for a, g in (ach.get("games") or {}).items() if g.get("playtimeMin")}
+            names = {a: g.get("name") for a, g in (ach.get("games") or {}).items()}
+        if playtime:
+            top = sorted(playtime.items(), key=lambda kv: -kv[1])[:3]
+            stats["mostPlayed"]["allTime"] = [{"appId": a, "name": names.get(a) or a, "seconds": m * 60} for a, m in top]
+        return stats
 
     def list_games(self, store: Store) -> list:
         """Every game once, under its main ID with its other IDs in `aliases`. A device instead sees each game
@@ -1366,6 +1399,8 @@ class Handler(BaseHTTPRequestHandler):
             if not user:
                 return self.send(401, {"error": "unauthorized"})
             store = Store(user["id"])
+            if p == ["api", "achievements"]:  # the Deck's achievements; answers with the merged result
+                return self.send(200, achievements.public(achievements.put(store.root, self.json_body())))
             if len(p) == 3 and p[:2] == ["api", "games"]:  # older plugin builds
                 return self.send(200, self.sync_game(store, safe(p[2])))
             if len(p) == 4 and p[:2] == ["api", "media"]:

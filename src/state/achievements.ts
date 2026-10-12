@@ -1,6 +1,7 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { backend } from "../api/backend";
 import { Achievement, AchievementData, GameAchievements } from "../types";
+import { useDataVersion } from "./notesStore";
 
 // Steam achievements, read from the Steam client itself (no key, works offline):
 //  - window.appAchievementProgressCache: unlocked / total for every game in the library. Asking it about a game
@@ -44,7 +45,10 @@ function save() {
   data = { ...data, updatedAt: Date.now() };
   changed();
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => backend.saveAchievements(data).catch((e) => console.error("Desk of Madness: save_achievements failed", e)), 2000);
+  saveTimer = setTimeout(() => {
+    saveTimer = undefined;
+    backend.saveAchievements(data).catch((e) => console.error("Desk of Madness: save_achievements failed", e));
+  }, 2000);
 }
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -164,7 +168,24 @@ export function startAchievementWatch(): () => void {
 
 export const getAchievements = () => data;
 
+/** A sync can bring in what the server found through the Steam Web API. */
+async function reloadIfNewer() {
+  try {
+    const saved = await backend.getAchievements();
+    if (saved?.games && (saved.updatedAt ?? 0) > data.updatedAt && !saveTimer) {
+      data = saved;
+      changed();
+    }
+  } catch {
+    // keep what we have
+  }
+}
+
 export function useAchievements(): AchievementData {
+  const dataVersion = useDataVersion();
+  useEffect(() => {
+    if (loaded) reloadIfNewer();
+  }, [dataVersion]);
   useSyncExternalStore(
     (l) => {
       listeners.add(l);

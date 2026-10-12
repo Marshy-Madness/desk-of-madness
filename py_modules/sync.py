@@ -137,6 +137,8 @@ class Sync:
 
         if self._sync_shared():
             pulled += 1
+        if self._sync_achievements(state):
+            pulled += 1
         self._refresh_account(state)
         state["lastSync"] = int(time.time() * 1000)
         state["lastError"] = None
@@ -173,6 +175,29 @@ class Sync:
             return False
         storage.save_shared(cache)
         return True
+
+    def _sync_achievements(self, state: dict) -> bool:
+        """Send the Steam achievements the Deck read; keep the server's merged copy (it may have Web API data)."""
+        path = storage.ACHIEVEMENTS_PATH
+        if not os.path.exists(path):
+            return False
+        with open(path, "rb") as f:
+            digest = hashlib.sha256(f.read()).hexdigest()
+        if digest == state.get("achievementsHash"):
+            return False
+        try:
+            merged = self._request("PUT", "/api/achievements", storage.load_achievements(), timeout=60)
+        except RuntimeError as e:
+            if "404" in str(e) or "405" in str(e):  # older server
+                return False
+            raise
+        merged = {k: merged[k] for k in ("updatedAt", "games") if k in merged}
+        changed = merged != storage.load_achievements()
+        if changed:
+            storage.save_achievements(merged, notify=False)
+        with open(path, "rb") as f:
+            state["achievementsHash"] = hashlib.sha256(f.read()).hexdigest()
+        return changed
 
     # ---- speech to text (the server owner turns it on per account) ----
 
