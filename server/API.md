@@ -68,6 +68,9 @@ Optional: `X-Client: n8n` (or any name) labels where a change came from in webho
 | `GET /api/wiki/find?name=…` | Wikis for a game (Fandom and wiki.gg sites named after it, then Wikipedia): `{wikis: [{base, api, name, home, logo, articlePath}]}`. Remembered for a week |
 | `GET /api/wiki/site?url=…` | The MediaWiki an address (or bare host name) is on, in the same shape. 422 when it isn't one |
 | `GET /api/wiki/search?wiki=…&q=…[&limit=20]` | Pages on that wiki: `{results: [{title, url, snippet}]}`. Read a result with `/api/reader?url=`. The website's 📖 Wiki Tome and the Deck's Wiki Scroll use these |
+| `GET /api/stats/play?tz=&dayStart=4&min=5&nonSteam=1` | Play statistics from every game's sessions (py_modules/playstats.py): last session, today, the week, streaks, records, most played (all time from Steam's playtime when known) and a 112-day calendar. `tz` is JavaScript's `getTimezoneOffset()` |
+| `GET /api/achievements[?refresh=1]` | Steam achievements: `{updatedAt, games: {appId: {name, unlocked, total, playtimeMin, lastPlayed, list?, updatedAt}}, webApi, steamLinked, refreshing}`. With `STEAM_API_KEY` set and a Steam sign-in, the server also asks Steam (at most hourly; `refresh=1` forces it) |
+| `PUT /api/achievements` | The Deck's achievements (same shape). Per game, the newer record wins; answers with the merged result |
 | `GET /api/history/{appId}/{noteId}` | Earlier versions of a note, newest first: `[{savedAt, reason, note}]` |
 | `GET /api/deleted/{appId}` | Deleted notes that can be restored: `[{deletedAt, note}]` |
 | `GET /api/media/{appId}` | File names of screenshots and voice notes |
