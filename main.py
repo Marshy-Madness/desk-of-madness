@@ -19,6 +19,7 @@ import news
 import screenshot
 import scrolls
 import system
+import playstats
 
 
 DICTATION_PATH = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "dictation.wav")
@@ -411,6 +412,24 @@ class Plugin:
         return await asyncio.to_thread(system.network)
 
     # Desk Commands (the command palette)
+    async def play_stats(self, tz_offset_min: int = 0, running_app_id: str = "", options: dict = None):
+        o = options or {}
+        return playstats.stats(
+            storage.all_sessions(),
+            tz_offset_min=tz_offset_min,
+            day_start_hour=o.get("dayStartHour", 4),
+            min_seconds=o.get("minMinutes", 5) * 60,
+            include_non_steam=o.get("includeNonSteam", True),
+            running_app_id=running_app_id or None,
+        )
+
+    async def get_achievements(self):
+        return storage.load_achievements()
+
+    async def save_achievements(self, data: dict):
+        storage.save_achievements(data)
+        return True
+
     async def search_notes(self, query: str, limit: int = 40):
         return await asyncio.to_thread(storage.search_notes, query, limit)
 

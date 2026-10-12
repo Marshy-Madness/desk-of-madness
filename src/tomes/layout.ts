@@ -1,10 +1,12 @@
 import { getSettings, updateSettings, useSettings } from "../state/notesStore";
-import { DeskLayout, DeskSettings } from "../types";
+import { DeskLayout, DeskSettings, TomeSize } from "../types";
 import { allTomes, TomeDef, useTomes } from "./registry";
 import { getServerInfo, useServerInfo } from "../state/speech";
+import { GAME_PAGE, pagesOf, savePage } from "./pages";
 
-// Which Tomes the Desk shows and in what order. There's one layout for every game, and (unless per-game
-// layouts are turned off) a game gets its own the first time you change the Desk while it's showing.
+// Which Tomes the Desk shows and in what order. The Desk has pages (pages.ts). The game page has one layout
+// for every game, and (unless per-game layouts are turned off) a game gets its own the first time you change
+// the Desk while it's showing. Every other page has a single layout of its own.
 
 export const DEFAULT_ORDER = [
   "game-brain",
@@ -25,6 +27,12 @@ export const DEFAULT_ORDER = [
   "network",
 ];
 
+/** Where a layout lives: a page, and (for the game page) the game showing. */
+export interface DeskAt {
+  pageId: string;
+  appId: string | null;
+}
+
 const desk = (): DeskSettings => getSettings().desk ?? {};
 
 export const perGameOn = (d: DeskSettings = desk()) => d.perGame !== false;
@@ -32,17 +40,30 @@ export const perGameOn = (d: DeskSettings = desk()) => d.perGame !== false;
 /** The default layout knows no Tomes, so each one shows in the built-in order, on if it's on by default. */
 export const defaultLayout = (): DeskLayout => ({ order: [], hidden: [], collapsed: [] });
 
-/** The layout to use for a game (null = no game showing). */
-export function layoutFor(appId: string | null, d: DeskSettings = desk()): DeskLayout {
+/** The layout to use for a page (and, on the game page, a game; null = no game showing). */
+export function layoutFor(at: DeskAt, d: DeskSettings = desk()): DeskLayout {
+  if (at.pageId !== GAME_PAGE) {
+    const page = pagesOf(d).find((p) => p.id === at.pageId);
+    if (page?.layout) return page.layout;
+  }
+  const appId = at.appId;
   // Then the starting Desk the sync server's admin set, then the built-in one.
   return (appId && perGameOn(d) && d.games?.[appId]) || d.layout || getServerInfo().deskDefaults || defaultLayout();
 }
 
-/** True when this game has a layout of its own. */
-export const hasOwnLayout = (appId: string | null, d: DeskSettings = desk()) => !!(appId && perGameOn(d) && d.games?.[appId]);
+/** True when this game has a layout of its own (game page only). */
+export const hasOwnLayout = (at: DeskAt, d: DeskSettings = desk()) =>
+  at.pageId === GAME_PAGE && !!(at.appId && perGameOn(d) && d.games?.[at.appId]);
 
-/** Every known Tome in display order, with whether it's on and folded. */
-export function arrange(layout: DeskLayout, tomes: readonly TomeDef[]) {
+export interface Arranged {
+  def: TomeDef;
+  on: boolean;
+  collapsed: boolean;
+  size: TomeSize;
+}
+
+/** Every known Tome in display order, with whether it's on, folded, and its size. */
+export function arrange(layout: DeskLayout, tomes: readonly TomeDef[], sizes: Record<string, TomeSize> = {}): Arranged[] {
   const ids = tomes.map((t) => t.id);
   const order = [
     ...layout.order.filter((id) => ids.includes(id)),
@@ -54,10 +75,18 @@ export function arrange(layout: DeskLayout, tomes: readonly TomeDef[]) {
     const known = layout.order.includes(id);
     return {
       def,
-      on: !layout.hidden.includes(id) && (known || def.defaultOn),
+      on: !layout.hidden.includes(id) && (known || (!layout.strict && def.defaultOn)),
       collapsed: layout.collapsed.includes(id),
+      size: sizeOf(def, layout.sizes?.[id] ?? sizes[id]),
     };
   });
+}
+
+/** A Tome's size: what was picked if it can be drawn that way, else its own default. */
+export function sizeOf(def: TomeDef, picked?: TomeSize): TomeSize {
+  const can = def.sizes ?? ["card"];
+  if (picked && can.includes(picked)) return picked;
+  return def.defaultSize ?? can[0];
 }
 
 const rank = (id: string) => {
@@ -65,33 +94,42 @@ const rank = (id: string) => {
   return i < 0 ? DEFAULT_ORDER.length : i;
 };
 
-/** Saves a change to the layout: to the game's own layout when per-game layouts are on and a game shows. */
-export function changeLayout(appId: string | null, change: (l: DeskLayout) => DeskLayout) {
+/** Saves a change to a layout: a page's own, or on the game page the game's own when per-game layouts are on. */
+export function changeLayout(at: DeskAt, change: (l: DeskLayout) => DeskLayout) {
   const d = desk();
-  const current = layoutFor(appId, d);
+  const current = layoutFor(at, d);
   // Fold in Tomes the saved layout didn't know about, so they keep their place once it's saved.
   const full = arrange(current, allTomes());
   const base: DeskLayout = {
     order: full.map((x) => x.def.id),
     hidden: full.filter((x) => !x.on).map((x) => x.def.id),
     collapsed: full.filter((x) => x.collapsed).map((x) => x.def.id),
+    ...(current.sizes ? { sizes: current.sizes } : {}),
+    ...(current.strict ? { strict: true } : {}),
   };
   const next = change(base);
-  if (appId && perGameOn(d)) return updateSettings({ desk: { ...d, games: { ...d.games, [appId]: next } } });
+  if (at.pageId !== GAME_PAGE) return savePage(at.pageId, { layout: next });
+  if (at.appId && perGameOn(d)) return updateSettings({ desk: { ...d, games: { ...d.games, [at.appId]: next } } });
   return updateSettings({ desk: { ...d, layout: next } });
 }
 
 const without = (list: string[], id: string) => list.filter((x) => x !== id);
 
-export const setTomeOn = (appId: string | null, id: string, on: boolean) =>
-  changeLayout(appId, (l) => ({ ...l, hidden: on ? without(l.hidden, id) : [...without(l.hidden, id), id] }));
+export const setTomeOn = (at: DeskAt, id: string, on: boolean) =>
+  changeLayout(at, (l) => {
+    const hidden = on ? without(l.hidden, id) : [...without(l.hidden, id), id];
+    return { ...l, hidden };
+  });
 
-export const setCollapsed = (appId: string | null, id: string, collapsed: boolean) =>
-  changeLayout(appId, (l) => ({ ...l, collapsed: collapsed ? [...without(l.collapsed, id), id] : without(l.collapsed, id) }));
+export const setCollapsed = (at: DeskAt, id: string, collapsed: boolean) =>
+  changeLayout(at, (l) => ({ ...l, collapsed: collapsed ? [...without(l.collapsed, id), id] : without(l.collapsed, id) }));
+
+export const setTomeSize = (at: DeskAt, id: string, size: TomeSize) =>
+  changeLayout(at, (l) => ({ ...l, sizes: { ...l.sizes, [id]: size } }));
 
 /** Moves a Tome up (-1) or down (+1) among the Tomes that are on. */
-export const moveTome = (appId: string | null, id: string, by: -1 | 1) =>
-  changeLayout(appId, (l) => {
+export const moveTome = (at: DeskAt, id: string, by: -1 | 1) =>
+  changeLayout(at, (l) => {
     const visible = l.order.filter((x) => !l.hidden.includes(x));
     const i = visible.indexOf(id);
     const target = visible[i + by];
@@ -121,11 +159,15 @@ export function resetGameLayout(appId: string) {
   return updateSettings({ desk: { ...d, games } });
 }
 
-/** The arranged Tomes for a game, re-rendering when settings or the registered Tomes change. */
-export function useArrangement(appId: string | null) {
+/** The arranged Tomes for a page (and game), re-rendering when settings or the registered Tomes change. */
+export function useArrangement(at: DeskAt) {
   const settings = useSettings();
   const tomes = useTomes();
   useServerInfo(); // the admin's starting Desk can arrive after the first draw
   const d = settings.desk ?? {};
-  return { items: arrange(layoutFor(appId, d), tomes), own: hasOwnLayout(appId, d), perGame: perGameOn(d) };
+  return {
+    items: arrange(layoutFor(at, d), tomes, d.sizes),
+    own: hasOwnLayout(at, d),
+    perGame: at.pageId === GAME_PAGE && perGameOn(d),
+  };
 }

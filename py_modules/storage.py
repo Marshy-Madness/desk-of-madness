@@ -166,6 +166,39 @@ def _list_local_games() -> list:
     return [_summary(load_game(a)) for a in appids]
 
 
+def all_sessions() -> list:
+    """Every game's name and sessions, for the play statistics."""
+    if not os.path.isdir(DATA_DIR):
+        return []
+    out = []
+    for entry in os.listdir(DATA_DIR):
+        if entry.endswith(".json"):
+            g = load_game(entry[:-5])
+            out.append({"appId": g["appId"], "name": g.get("name"), "sessions": g.get("sessions", [])})
+    return out
+
+
+ACHIEVEMENTS_PATH = os.path.join(decky.DECKY_PLUGIN_SETTINGS_DIR, "achievements.json")
+
+
+def load_achievements() -> dict:
+    if not os.path.exists(ACHIEVEMENTS_PATH):
+        return {"updatedAt": 0, "games": {}}
+    with open(ACHIEVEMENTS_PATH) as f:
+        return json.load(f)
+
+
+def save_achievements(data: dict, notify: bool = True) -> dict:
+    tmp = ACHIEVEMENTS_PATH + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(data, f)
+    os.replace(tmp, ACHIEVEMENTS_PATH)
+    if notify:
+        for fn in _dirty_listeners:
+            fn()
+    return data
+
+
 def search_notes(query: str, limit: int = 40) -> list:
     """Notes in every game whose title, text, tags or checklist have all the words in `query`, best first."""
     words = [w for w in query.lower().split() if w]

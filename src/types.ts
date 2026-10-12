@@ -244,6 +244,8 @@ export interface Settings {
   readerTextSize?: number;
   /** The Desk: which Tomes show, in what order, and Tome options. */
   desk?: DeskSettings;
+  /** Session tracking options. */
+  play?: PlaySettings;
   /** Installed Scrolls: on or off, and each Scroll's own settings. */
   scrolls?: Record<string, ScrollState>;
 }
@@ -313,6 +315,10 @@ export interface DeskLayout {
   hidden: string[];
   /** Tomes folded down to their title bar. */
   collapsed: string[];
+  /** Tile or card, per Tome (unset = the Tome's own default). */
+  sizes?: Record<string, TomeSize>;
+  /** Only Tomes in `order` show (pages other than the game page don't pick up new default Tomes). */
+  strict?: boolean;
 }
 
 export interface DeskSettings {
@@ -334,6 +340,21 @@ export interface DeskSettings {
   compact?: boolean;
   /** The Workshop Tome's "new books" badge. On unless turned off. */
   workshopBadge?: boolean;
+  /** The Desk's pages, in order (unset = the starter pages). */
+  pages?: DeskPage[];
+  /** Tile or card, per Tome id, for the layouts that don't say. */
+  sizes?: Record<string, TomeSize>;
+}
+
+export type TomeSize = "tile" | "card";
+
+/** A page of the Desk. The "game" page uses the per-game layouts; every other page has its own layout. */
+export interface DeskPage {
+  id: string;
+  name: string;
+  icon: string;
+  /** Unset for the game page (it uses DeskSettings.layout / games). */
+  layout?: DeskLayout;
 }
 
 export type BrowserMode = "reader" | "full";
@@ -509,4 +530,78 @@ export interface DockerContainer {
   state: string;
   status: string;
   project: string;
+}
+
+// ---------- play statistics (py_modules/playstats.py) ----------
+
+export interface PlayGameTime {
+  appId: string;
+  name: string;
+  seconds: number;
+}
+
+export interface PlayStats {
+  now: number;
+  dayStartHour: number;
+  /** When the first counted session started (null = none yet). */
+  trackedSince: number | null;
+  last: { appId: string; name: string; start: number; seconds: number; live: boolean } | null;
+  today: { seconds: number; games: { appId: string; name: string }[] };
+  week: { seconds: number; days: { day: string; seconds: number }[] };
+  streak: { current: number; best: number; playedToday: boolean };
+  records: {
+    longest: { appId: string; name: string; start: number; seconds: number } | null;
+    averageSeconds: number;
+    sessions: number;
+    totalSeconds: number;
+  };
+  mostPlayed: { week: PlayGameTime[]; month: PlayGameTime[]; allTime: PlayGameTime[] };
+  /** One entry per day, oldest first, ending today. */
+  calendar: { day: string; seconds: number }[];
+}
+
+export interface PlaySettings {
+  /** Count non-Steam games (shortcuts). On unless turned off. */
+  includeNonSteam?: boolean;
+  /** Hour a new day starts (0-23); unset = 4. */
+  dayStartHour?: number;
+  /** Sessions shorter than this many minutes don't count; unset = 5. */
+  minMinutes?: number;
+}
+
+// ---------- Steam achievements ----------
+
+export interface Achievement {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  iconGray?: string;
+  hidden: boolean;
+  /** Seconds since the epoch, 0 = locked. */
+  unlockedAt: number;
+  /** Percent of players who have it, when known. */
+  globalPct?: number;
+  /** Progress toward it (e.g. 34 of 100), when Steam tracks one. */
+  progress?: { current: number; max: number };
+}
+
+export interface GameAchievements {
+  appId: string;
+  name: string;
+  unlocked: number;
+  total: number;
+  /** Steam's lifetime playtime, in minutes. */
+  playtimeMin?: number;
+  /** Seconds since the epoch. */
+  lastPlayed?: number;
+  /** The full list, when it's been fetched. */
+  list?: Achievement[];
+  /** When the counts or list were last read, ms. */
+  updatedAt: number;
+}
+
+export interface AchievementData {
+  updatedAt: number;
+  games: Record<string, GameAchievements>;
 }

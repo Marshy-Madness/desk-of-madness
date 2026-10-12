@@ -3,3 +3,4 @@ import "./desk";
 import "./gaming";
 import "./workshop";
 import "./deck";
+import "./play";

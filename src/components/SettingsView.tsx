@@ -220,7 +220,7 @@ export const SettingsView: FC = () => {
 
           <Heading>Tomes</Heading>
           <PanelSectionRow>
-            <TomeList appId={null} />
+            <TomeList />
           </PanelSectionRow>
 
           <Heading>While playing</Heading>

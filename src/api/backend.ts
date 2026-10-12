@@ -1,5 +1,5 @@
 import { call } from "@decky/api";
-import { DockerContainer, HomeEntity, NoteHit, DeskLayout, InstalledScroll, SteamNewsItem, WorkshopScroll, WorkshopEntry, WorkshopGame, WorkshopPack, WorkshopSummary, WorkshopUser, ServerUser, Share, BackupStatus, Counter, DeletedNote, Folder, NoteVersion, LeftOff, Game, GameSummary, Note, Recording, Screenshot, Settings, SteamScreenshot, ReaderPage, ReaderCacheSettings, WikiSite, WikiResult } from "../types";
+import { AchievementData, PlaySettings, PlayStats, DockerContainer, HomeEntity, NoteHit, DeskLayout, InstalledScroll, SteamNewsItem, WorkshopScroll, WorkshopEntry, WorkshopGame, WorkshopPack, WorkshopSummary, WorkshopUser, ServerUser, Share, BackupStatus, Counter, DeletedNote, Folder, NoteVersion, LeftOff, Game, GameSummary, Note, Recording, Screenshot, Settings, SteamScreenshot, ReaderPage, ReaderCacheSettings, WikiSite, WikiResult } from "../types";
 
 export const backend = {
   importNotice: () => call<[], { from: string } | null>("import_notice"),
@@ -8,6 +8,10 @@ export const backend = {
   recordLaunch: (appId: string, name: string) => call<[string, string], GameSummary>("record_launch", appId, name),
   recordExit: (appId: string) => call<[string], GameSummary>("record_exit", appId),
   ensureGame: (appId: string, name: string) => call<[string, string], GameSummary>("ensure_game", appId, name),
+  playStats: (tzOffsetMin: number, runningAppId: string, options: PlaySettings) =>
+    call<[number, string, PlaySettings], PlayStats>("play_stats", tzOffsetMin, runningAppId, options),
+  getAchievements: () => call<[], AchievementData>("get_achievements"),
+  saveAchievements: (data: AchievementData) => call<[AchievementData], boolean>("save_achievements", data),
 
   saveNote: (appId: string, note: Note) => call<[string, Note], Note>("save_note", appId, note),
   deleteNote: (appId: string, noteId: string) => call<[string, string], void>("delete_note", appId, noteId),

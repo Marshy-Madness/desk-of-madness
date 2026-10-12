@@ -63,3 +63,34 @@ export function openItems(game: Game) {
 }
 
 export const allItems = (game: Game) => game.notes.flatMap((n) => n.checklist ?? []);
+
+// ---------- tiles ----------
+
+/** A tile's insides: a big value, a label, and an optional line under it. */
+export const Stat: FC<{ value: ReactNode; label: string; sub?: ReactNode; accent?: string; icon?: string }> = ({ value, label, sub, accent, icon }) => (
+  <>
+    <div style={{ fontSize: "11px", fontWeight: "bold", letterSpacing: "0.06em", textTransform: "uppercase", opacity: 0.65, ...ellipsis }}>
+      {icon && <span style={{ marginRight: "5px" }}>{icon}</span>}
+      {label}
+    </div>
+    <div style={{ fontSize: "24px", fontWeight: 800, lineHeight: 1.15, margin: "2px 0 1px", color: accent, ...ellipsis }}>{value}</div>
+    {sub != null && <div className="dom-sub" style={{ fontSize: "12px", opacity: 0.7, ...ellipsis }}>{sub}</div>}
+  </>
+);
+
+/** A thin progress bar (0-1). */
+export const Bar: FC<{ value: number; color?: string; height?: number; style?: CSSProperties }> = ({ value, color = "#1a9fff", height = 6, style }) => (
+  <div style={{ height, borderRadius: height, background: "rgba(255,255,255,0.1)", overflow: "hidden", ...style }}>
+    <div style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%`, height: "100%", background: color, borderRadius: height }} />
+  </div>
+);
+
+/** "2h 14m", "45m", or "0m" (never seconds: these are play times). */
+export function hm(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  return h ? `${h}h ${m}m` : `${m}m`;
+}
+
+/** Big round hours for long totals: "1,234 h". */
+export const hours = (seconds: number) => `${Math.round(seconds / 3600).toLocaleString()} h`;
