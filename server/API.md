@@ -67,7 +67,7 @@ Optional: `X-Client: n8n` (or any name) labels where a change came from in webho
 | `GET /api/reader?url=…[&refresh=1]` | A web page boiled down to its article, without ads, menus or scripts: `{url, title, site, image, excerpt, html, length, fetchedAt, cached}`. `html` uses plain tags only (no styles or scripts, http(s) links and images only). Pages are kept on the server and served from there next time (`cached: true`); `refresh=1` makes it again. Wiki pages (Fandom, wiki.gg, Wikipedia, and any `/wiki/…` or `/w/…` address on a MediaWiki) come from the MediaWiki API, with Fandom infoboxes kept as tables. 422 `{error}` when the site blocks it or isn't a web page |
 | `GET /api/wiki/find?name=…` | Wikis for a game (Fandom and wiki.gg sites named after it, then Wikipedia): `{wikis: [{base, api, name, home, logo, articlePath}]}`. Remembered for a week |
 | `GET /api/wiki/site?url=…` | The MediaWiki an address (or bare host name) is on, in the same shape. 422 when it isn't one |
-| `GET /api/wiki/search?wiki=…&q=…[&limit=20]` | Pages on that wiki: `{results: [{title, url, snippet}]}`. Read a result with `/api/reader?url=` |
+| `GET /api/wiki/search?wiki=…&q=…[&limit=20]` | Pages on that wiki: `{results: [{title, url, snippet}]}`. Read a result with `/api/reader?url=`. The website's 📖 Wiki Tome and the Deck's Wiki Scroll use these |
 | `GET /api/history/{appId}/{noteId}` | Earlier versions of a note, newest first: `[{savedAt, reason, note}]` |
 | `GET /api/deleted/{appId}` | Deleted notes that can be restored: `[{deletedAt, note}]` |
 | `GET /api/media/{appId}` | File names of screenshots and voice notes |

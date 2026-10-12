@@ -116,6 +116,23 @@
   .kv { display: grid; grid-template-columns: 170px 1fr; gap: 6px 12px; font-size: 14px; } .kv span { opacity: .65; } .kv b { font-weight: 500; word-break: break-all; }
   #announce { background: #1e3a55; padding: 10px 20px; display: flex; gap: 12px; align-items: center; }
   #announce span { flex: 1; white-space: pre-wrap; }
+  /* ---- 📖 wiki reader ---- */
+  .wikidlg .wkbar { flex: 0 0 auto; flex-wrap: nowrap; margin-bottom: 8px; } .wikidlg #wkSite { max-width: 34%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .wkbody { flex: 1 1 auto; overflow-y: auto; min-height: 0; } .wkpage { max-width: 820px; margin: 0 auto; font-size: 17px; } .wkpage h1 { font-size: 1.7em; line-height: 1.2; margin: 4px 0 .6em; }
+  .sn-reader { line-height: 1.6; overflow-wrap: anywhere; }
+  .sn-reader p, .sn-reader ul, .sn-reader ol, .sn-reader dl, .sn-reader blockquote, .sn-reader pre, .sn-reader figure { margin: 0 0 .9em; }
+  .sn-reader h2 { font-size: 1.45em; margin: 1.2em 0 .5em; line-height: 1.25; } .sn-reader h3 { font-size: 1.25em; margin: 1.1em 0 .45em; } .sn-reader h4, .sn-reader h5, .sn-reader h6 { font-size: 1.08em; margin: 1em 0 .4em; }
+  .sn-reader a { color: #59bfff; } .sn-reader img { max-width: 100%; max-height: 60vh; height: auto; border-radius: 4px; display: block; margin: .4em 0; }
+  .sn-reader figcaption { font-size: .85em; opacity: .75; } .sn-reader blockquote { border-left: 3px solid rgba(255,255,255,.3); padding-left: .9em; }
+  .sn-reader pre { white-space: pre-wrap; background: rgba(0,0,0,.3); padding: .6em .8em; border-radius: 4px; } .sn-reader code, .sn-reader kbd { background: rgba(0,0,0,.3); padding: 0 .25em; border-radius: 3px; }
+  .sn-reader .sn-table { overflow-x: auto; margin: 0 0 .9em; } .sn-reader table { border-collapse: collapse; font-size: .92em; } .sn-reader caption { font-weight: bold; padding: .3em 0; }
+  .sn-reader td, .sn-reader th { border: 1px solid rgba(255,255,255,.18); padding: .3em .55em; vertical-align: top; } .sn-reader th { background: rgba(255,255,255,.07); }
+  .sn-reader hr { border: 0; border-top: 1px solid rgba(255,255,255,.2); margin: 1.2em 0; }
+  .wk-block { border-left: 4px solid transparent; padding-left: 10px; margin-left: -14px; border-radius: 2px; }
+  .wk-selecting .wk-block { cursor: pointer; } .wk-selecting .wk-block:hover { background: rgba(255,255,255,.05); } .wk-selecting a { pointer-events: none; }
+  .wk-block.wk-on { border-left-color: var(--accent); background: rgba(26,159,255,.12) !important; }
+  .wkcount { flex: 1 1 auto; font-size: 14px; opacity: .85; }
+  .wikidlg .actions { flex: 0 0 auto; position: static; margin: 8px -20px -20px; display: flex; align-items: center; gap: 8px; }
   /* ---- phones ---- */
   @media (max-width: 760px) {
     .hide-sm { display: none; }
@@ -500,7 +517,7 @@ function render() {
 const WEB_TOMES = [
   ["game-brain", "🧠", "Game Brain"], ["left-off", "📍", "Where I Left Off"], ["checklist", "☑️", "Active Checklist"],
   ["counters", "⚔️", "Counters"], ["recent-notes", "📝", "Recent Notes"], ["guides", "📚", "Guides"],
-  ["voice-notes", "🎙️", "Voice Notes"], ["game-stats", "📊", "Game Stats"], ["pinned-notes", "📌", "Pinned Notes"], ["workshop", "🏭", "Madness Workshop"],
+  ["voice-notes", "🎙️", "Voice Notes"], ["game-stats", "📊", "Game Stats"], ["pinned-notes", "📌", "Pinned Notes"], ["workshop", "🏭", "Madness Workshop"], ["wiki", "📖", "Wiki"],
 ];
 const WEB_TOMES_OFF = ["left-off"];
 let deskEditing = false, recentFilter = "all";
@@ -573,6 +590,14 @@ function tomeBody(id) {
     return `<div class="kv"><span>Playtime</span><b>${h ? h + "h " : ""}${m}m</b><span>Launches</span><b>${game.launchCount ?? 0}</b><span>Last played</span><b>${esc(day(game.lastLaunched))}</b><span>Notes</span><b>${game.notes.length}</b></div>`;
   }
   if (id === "pinned-notes") return game.notes.filter((n) => n.pinned).sort(byUpdated).map(noteLine).join("") || '<div class="meta">No pinned notes.</div>';
+  if (id === "wiki") {
+    const w = wikiConf().wikis?.[game.appId];
+    const recent = (wikiConf().recent?.[game.appId] || []).slice(0, 4);
+    return `<form class="toolbar wksearch" style="margin:0 0 6px"><input placeholder="Search ${esc(w?.name || "the wiki")}…" style="flex:1;min-width:0"><button class="primary">🔍</button></form>` +
+      recent.map((r) => line("📄", "", esc(r.title), `data-wiki="${esc(r.url)}"`)).join("") +
+      `<div class="toolbar"><button data-wiki="">${w ? `📖 ${esc(w.name)}` : "📖 Open the wiki"}</button></div>` +
+      '<div class="meta">Read without ads, then pick parts (or highlight text) to save into a note.</div>';
+  }
   if (id === "workshop") return workshopUrl ? `<div class="meta">Community books for ${esc(game.name)}.</div><div class="toolbar"><a href="${esc(workshopUrl)}/?game=${encodeURIComponent(game.appId)}&name=${encodeURIComponent(game.name)}" target="_blank" rel="noopener"><button class="primary">🏭 Open in the Madness Workshop</button></a></div>` : '<div class="meta">No Workshop set up on this server.</div>';
   return "";
 }
@@ -638,10 +663,294 @@ function renderDesk() {
     const by = b.dataset.cact === "inc" ? 1 : -1; if (cnt.count + by < 0) return;
     cnt.count += by; cnt.sessionCount = Math.max(0, (cnt.sessionCount || 0) + by); cnt.updatedAt = Date.now(); save();
   }));
+  c.querySelectorAll("[data-wiki]").forEach((el) => (el.onclick = () => wikiDialog(el.dataset.wiki ? { page: el.dataset.wiki } : null).then((d) => d && d.addEventListener("close", renderDesk))));
+  c.querySelectorAll("form.wksearch").forEach((f) => (f.onsubmit = (e) => { e.preventDefault(); const q = f.querySelector("input").value.trim(); if (q) wikiDialog({ search: q }).then((d) => d && d.addEventListener("close", renderDesk)); }));
   c.querySelectorAll("[data-rf]").forEach((b) => (b.onclick = () => { recentFilter = b.dataset.rf; renderDesk(); }));
   c.querySelectorAll("[data-guides]").forEach((b) => (b.onclick = () => { folderFilter = "guides"; gameView = "notes"; localStorage.setItem("dom-view", "notes"); render(); }));
   if ($("#saveLeftOff")) $("#saveLeftOff").onclick = () => { game.leftOff = { text: $("#leftOff").value.trim(), updatedAt: Date.now(), launchNumber: null }; save(); };
   if ($("#clearLeftOff")) $("#clearLeftOff").onclick = () => { game.leftOff = { text: "", updatedAt: Date.now(), launchNumber: null }; save(); };
+}
+
+// ---------- 📖 Wiki: a game's wiki in the reader view (made and kept by this server), with parts saved into notes ----------
+// The same as the Deck's Wiki Scroll (scrolls/wiki). Wikis picked and pages read are kept in this browser (dom-wiki).
+const wikiConf = () => { try { return JSON.parse(localStorage.getItem("dom-wiki") || "{}"); } catch { return {}; } };
+const setWikiConf = (patch) => localStorage.setItem("dom-wiki", JSON.stringify({ ...wikiConf(), ...patch }));
+const wikiHost = (url) => { try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url; } };
+
+/** The game's wiki: the one picked before, else the best one found (remembered). */
+async function wikiFor(appId, name) {
+  const chosen = wikiConf().wikis?.[appId];
+  if (chosen) return chosen;
+  const { wikis } = await api(`/api/wiki/find?name=${encodeURIComponent(name)}`);
+  if (!wikis.length) return null;
+  setWikiConf({ wikis: { ...wikiConf().wikis, [appId]: wikis[0] } });
+  return wikis[0];
+}
+
+/** A page's title when `url` is an article on `site` (not a file, special or edit page). */
+function wikiTitle(site, url) {
+  const [prefix, suffix] = site.articlePath.split("$1");
+  if (!url.startsWith(prefix)) return null;
+  let rest = url.slice(prefix.length);
+  if (suffix && rest.endsWith(suffix)) rest = rest.slice(0, -suffix.length);
+  if (!rest || rest.includes("?")) return null;
+  const title = decodeURIComponent(rest.split("#")[0]).replace(/_/g, " ");
+  return /^(File|Image|Special|Template|User|User talk|Talk|MediaWiki|Module|Help)\s*:/i.test(title) ? null : title;
+}
+
+// Reader markup is rebuilt from a whitelist (never innerHTML), keeping only http(s) links and images.
+const RD_TAGS = new Set(["p", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "a", "img", "figure", "figcaption", "blockquote", "pre", "code",
+  "table", "thead", "tbody", "tfoot", "tr", "td", "th", "caption", "strong", "em", "b", "i", "u", "s", "sub", "sup", "br", "hr", "dl", "dt", "dd", "div", "small", "mark", "kbd"]);
+const RD_SKIP = new Set(["script", "style", "noscript", "template", "iframe", "object", "embed", "svg", "math", "head", "title", "textarea", "select", "button"]);
+const httpUrl = (u) => (u && /^https?:\/\//i.test(u) ? u : null);
+function rdClean(node, into) {
+  for (const c of node.childNodes) {
+    if (c.nodeType === 3) { into.appendChild(document.createTextNode(c.textContent)); continue; }
+    if (c.nodeType !== 1) continue;
+    const tag = c.tagName.toLowerCase();
+    if (RD_SKIP.has(tag)) continue;
+    if (!RD_TAGS.has(tag) || (tag === "a" && !httpUrl(c.getAttribute("href")))) { rdClean(c, into); continue; }
+    if (tag === "img") {
+      const src = httpUrl(c.getAttribute("src")); if (!src) continue;
+      const img = document.createElement("img"); img.src = src; img.alt = (c.getAttribute("alt") || "").slice(0, 300); img.loading = "lazy"; img.referrerPolicy = "no-referrer";
+      into.appendChild(img); continue;
+    }
+    const el = document.createElement(tag);
+    if (tag === "a") { el.href = c.getAttribute("href"); el.dataset.href = el.href; el.rel = "noopener noreferrer"; }
+    if (tag === "td" || tag === "th") for (const a of ["colspan", "rowspan"]) { const n = Number(c.getAttribute(a)); if (n > 1) el.setAttribute(a, String(Math.min(n, 50))); }
+    rdClean(c, el);
+    if (tag === "table") { const wrap = document.createElement("div"); wrap.className = "sn-table"; wrap.appendChild(el); into.appendChild(wrap); }
+    else into.appendChild(el);
+  }
+  return into;
+}
+
+/** The article as blocks (headings, paragraphs, lists, tables…) that can be picked one by one. */
+const WK_BLOCKY = new Set(["p", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "dl", "table", "figure", "blockquote", "pre", "hr", "div"]);
+function wikiBlocks(html) {
+  const parsed = new DOMParser().parseFromString(`<body>${html}</body>`, "text/html");
+  const root = rdClean(parsed.body, document.createElement("div"));
+  const out = []; let inline = [];
+  const flush = () => {
+    if (inline.some((n) => n.textContent.trim() || n.tagName === "IMG")) { const p = document.createElement("p"); inline.forEach((n) => p.appendChild(n)); out.push({ el: p, level: 0 }); }
+    inline = [];
+  };
+  const walk = (parent) => {
+    for (const el of [...parent.childNodes]) {
+      if (el.nodeType !== 1) { if (el.nodeType === 3) inline.push(el); continue; }
+      const tag = el.tagName.toLowerCase();
+      if (!WK_BLOCKY.has(tag)) { inline.push(el); continue; }
+      flush();
+      if (tag === "div" && el.className !== "sn-table" && [...el.children].some((c) => WK_BLOCKY.has(c.tagName.toLowerCase()))) { walk(el); flush(); continue; }
+      if (!el.textContent.trim() && !el.querySelector("img")) continue;
+      const h = /^h([2-6])$/.exec(tag);
+      out.push({ el, level: h ? Number(h[1]) : 0, heading: h ? el.textContent.replace(/\s+/g, " ").trim() : undefined });
+    }
+  };
+  walk(root); flush();
+  return out;
+}
+const wikiSection = (blocks, i) => {
+  const level = blocks[i]?.level; if (!level) return [i];
+  const out = [i]; for (let j = i + 1; j < blocks.length && !(blocks[j].level && blocks[j].level <= level); j++) out.push(j);
+  return out;
+};
+
+// Picked parts as plain note text: headings as ■ lines, lists as bullets, tables as rows ("Label: value" for infoboxes).
+const squash = (t) => t.replace(/\s+/g, " ").trim();
+function wkInline(el) {
+  let out = "";
+  el.childNodes.forEach((n) => {
+    if (n.nodeType === 3) out += n.textContent;
+    else if (n.nodeType === 1) {
+      const tag = n.tagName.toLowerCase();
+      if (tag === "br") out += "\n";
+      else if (tag === "img" || tag === "figure") return;
+      else if (/^(ul|ol|table|dl)$/.test(tag)) out += "\n" + wkText(n, 1) + "\n";
+      else out += wkInline(n);
+    }
+  });
+  return out.replace(/[ \t\r\f\v]+/g, " ");
+}
+function wkText(el, depth = 0) {
+  const tag = el.tagName.toLowerCase();
+  const indent = "  ".repeat(Math.max(0, depth - 1));
+  if (tag === "ul" || tag === "ol") return [...el.children].filter((li) => li.tagName === "LI").map((li, i) => {
+    const c = li.cloneNode(true); const nested = [...c.children].filter((x) => /^(UL|OL)$/.test(x.tagName)); nested.forEach((x) => x.remove());
+    return [`${indent}${tag === "ol" ? `${i + 1}.` : "•"} ${squash(wkInline(c))}`, ...nested.map((x) => wkText(x, depth + 1))].join("\n");
+  }).join("\n");
+  if (tag === "table") {
+    const cell = (c) => wkInline(c).split("\n").map(squash).filter(Boolean).join(", ");
+    const infobox = !!el.querySelector("tr > th + td");
+    const rows = [...el.querySelectorAll("tr")].map((tr) => [...tr.children].map(cell)).filter((r) => r.some(Boolean));
+    const cap = el.querySelector("caption");
+    return [cap ? squash(cap.textContent) : "", ...rows.map((r) => (r.length === 2 && infobox ? `${r[0]}: ${r[1]}` : r.join(" | ")))].filter(Boolean).join("\n");
+  }
+  if (tag === "dl") return [...el.children].map((c) => (c.tagName === "DT" ? `${squash(wkInline(c))}:` : `  ${squash(wkInline(c))}`)).join("\n");
+  if (tag === "figure") { const cap = el.querySelector("figcaption"); return cap ? `(${squash(cap.textContent)})` : ""; }
+  if (tag === "hr") return "———";
+  if (tag === "div" && [...el.children].some((c) => WK_BLOCKY.has(c.tagName.toLowerCase()) || c.tagName === "LI")) {
+    return [...el.childNodes].map((c) => (c.nodeType === 1 ? wkText(c, depth) : squash(c.textContent || ""))).filter(Boolean).join("\n\n");
+  }
+  return wkInline(el).split("\n").map((l) => l.trim()).join("\n");
+}
+const wkClean = (t) => t.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+
+/** The wiki reader. `view`: {page: url} | {search: q} | nothing for the wiki's main page. */
+async function wikiDialog(view) {
+  const appId = game.appId, gameName = game.name;
+  const dlg = document.createElement("dialog");
+  dlg.className = "wide wikidlg";
+  dlg.innerHTML = `<div class="toolbar wkbar">
+      <button id="wkBack" class="icon" title="Back">←</button>
+      <button id="wkSite" title="Change wiki">📖 <span>Wiki</span></button>
+      <form id="wkForm" style="flex:1;display:flex;min-width:0"><input id="wkQ" type="search" placeholder="Search the wiki…" style="flex:1;min-width:0"></form>
+      <button id="wkSel" title="Pick parts of the page for a note">✂<span class="hide-sm"> Select</span></button>
+      <button id="wkClose" class="icon" title="Close">✕</button></div>
+    <div id="wkTip" class="meta hidden" style="margin:0 0 6px"></div>
+    <div id="wkBody" class="wkbody"></div>
+    <div id="wkBar" class="actions toolbar hidden"><span id="wkCount" class="wkcount"></span><button id="wkClear">Clear</button><button id="wkAdd" class="primary">＋ Add to a note</button></div>`;
+  document.body.appendChild(dlg); dlg.showModal();
+  dlg.addEventListener("close", () => { document.removeEventListener("selectionchange", onSel); dlg.remove(); });
+  const body = $("#wkBody", dlg);
+  let site = null, cur = null, page = null, blocks = [], selecting = false, gen = 0;
+  const picked = new Set(), history = [];
+
+  const highlighted = () => {
+    const s = window.getSelection();
+    if (!s || s.isCollapsed || !s.rangeCount || !body.contains(s.getRangeAt(0).commonAncestorContainer)) return null;
+    const box = document.createElement("div"); box.appendChild(s.getRangeAt(0).cloneContents());
+    return wkClean(wkText(box)) || null;
+  };
+  const paintBar = () => {
+    const hl = !selecting && page && highlighted();
+    $("#wkBar", dlg).classList.toggle("hidden", !(picked.size || hl));
+    $("#wkCount", dlg).textContent = picked.size ? `${picked.size} part${picked.size === 1 ? "" : "s"} picked` : hl ? "Highlighted text" : "";
+    $("#wkClear", dlg).classList.toggle("hidden", !picked.size);
+    $("#wkSel", dlg).classList.toggle("primary", selecting);
+    $("#wkTip", dlg).classList.toggle("hidden", !selecting);
+    $("#wkTip", dlg).textContent = "Tap parts to pick them (a heading picks its whole section). Or stop selecting and highlight any text.";
+  };
+  function onSel() { if (dlg.open) paintBar(); }
+  document.addEventListener("selectionchange", onSel);
+
+  const show = async (v, push = true) => {
+    if (push && cur) history.push(cur);
+    cur = v; page = null; blocks = []; picked.clear(); selecting = false;
+    const my = ++gen;
+    body.innerHTML = '<p class="meta" style="padding:24px 0">Loading…</p>'; paintBar();
+    try {
+      if (v.search) {
+        $("#wkQ", dlg).value = v.search;
+        const { results } = await api(`/api/wiki/search?wiki=${encodeURIComponent(site.base)}&q=${encodeURIComponent(v.search)}`);
+        if (my !== gen) return;
+        body.innerHTML = `<h2>${results.length ? `Results for “${esc(v.search)}”` : `Nothing on ${esc(site.name)} for “${esc(v.search)}”`}</h2>` +
+          results.map((r, i) => `<div class="card" data-r="${i}" style="display:block"><h3>${esc(r.title)}</h3>${r.snippet ? `<div class="meta">${esc(r.snippet)}</div>` : ""}</div>`).join("");
+        body.querySelectorAll("[data-r]").forEach((el) => (el.onclick = () => show({ page: results[+el.dataset.r].url })));
+      } else {
+        const p = await api(`/api/reader?url=${encodeURIComponent(v.page)}`);
+        if (my !== gen) return;
+        if (p.length < 120) throw new Error("This page has hardly any text. Try searching instead.");
+        page = p; blocks = wikiBlocks(p.html);
+        const recent = [{ title: p.title || wikiHost(p.url), url: v.page }, ...(wikiConf().recent?.[appId] || []).filter((r) => r.url !== v.page)].slice(0, 10);
+        setWikiConf({ recent: { ...wikiConf().recent, [appId]: recent } });
+        body.innerHTML = `<div class="wkpage"><div class="meta">${esc(p.site)}${p.cached ? " · saved copy" : ""} · <a href="${esc(httpUrl(p.url) || "#")}" target="_blank" rel="noopener">open the real page</a></div><h1>${esc(p.title)}</h1><div class="sn-reader"></div></div>`;
+        const box = body.querySelector(".sn-reader");
+        blocks.forEach((b, i) => { const w = document.createElement("div"); w.className = "wk-block"; w.dataset.block = i; w.appendChild(b.el); box.appendChild(w); });
+      }
+      body.scrollTop = 0;
+    } catch (err) {
+      if (my !== gen) return;
+      body.innerHTML = `<p style="padding:24px 0">⚠️ ${esc(err.message)}</p><p class="meta">Search above, or pick another wiki with 📖.</p>`;
+    }
+    paintBar();
+  };
+
+  const paintPicks = () => body.querySelectorAll("[data-block]").forEach((el) => el.classList.toggle("wk-on", picked.has(+el.dataset.block)));
+  body.onclick = (e) => {
+    if (selecting) {
+      const b = e.target.closest("[data-block]"); if (!b) return;
+      e.preventDefault();
+      const i = +b.dataset.block, on = !picked.has(i);
+      wikiSection(blocks, i).forEach((j) => (on ? picked.add(j) : picked.delete(j)));
+      paintPicks(); paintBar(); return;
+    }
+    const a = e.target.closest("a[data-href]"); if (!a) return;
+    e.preventDefault();
+    if (site && wikiTitle(site, a.dataset.href)) show({ page: a.dataset.href });
+    else window.open(a.dataset.href, "_blank", "noopener");
+  };
+
+  const pickWiki = async () => {
+    const pd = document.createElement("dialog");
+    pd.innerHTML = `<h3 style="margin-top:0">📖 Wiki for ${esc(gameName)}</h3><div id="pwList"><p class="meta">Looking for wikis…</p></div>
+      <label>Or type a wiki's address</label><form id="pwForm" class="toolbar"><input id="pwAddr" placeholder="e.g. eldenring.wiki.gg" style="flex:1"><button class="primary">Use it</button></form>
+      <div class="actions toolbar"><span style="flex:1"></span><button id="pwCancel">Cancel</button></div>`;
+    document.body.appendChild(pd); pd.showModal();
+    const done = (w) => {
+      setWikiConf({ wikis: { ...wikiConf().wikis, [appId]: w } });
+      pd.close(); pd.remove();
+      site = w; $("#wkSite span", dlg).textContent = w.name; history.length = 0; cur = null; show({ page: w.home });
+      if (dlg.onWikiChanged) dlg.onWikiChanged();
+    };
+    $("#pwCancel", pd).onclick = () => { pd.close(); pd.remove(); };
+    $("#pwForm", pd).onsubmit = async (e) => {
+      e.preventDefault();
+      try { done(await api(`/api/wiki/site?url=${encodeURIComponent($("#pwAddr", pd).value.trim())}`)); } catch (err) { alert(err.message); }
+    };
+    try {
+      const { wikis } = await api(`/api/wiki/find?name=${encodeURIComponent(gameName)}`);
+      $("#pwList", pd).innerHTML = wikis.map((w, i) => line(site?.home === w.home ? "✅" : "📖", "", `${esc(w.name)}<div class="meta">${esc(wikiHost(w.base))}</div>`, `data-w="${i}"`)).join("") || '<p class="meta">No wiki found by name. Type its address below.</p>';
+      pd.querySelectorAll("[data-w]").forEach((el) => (el.onclick = () => done(wikis[+el.dataset.w])));
+    } catch (err) { $("#pwList", pd).innerHTML = `<p class="meta">⚠️ ${esc(err.message)}</p>`; }
+  };
+
+  const addToNote = () => {
+    const idx = [...picked].sort((a, b) => a - b);
+    const text = idx.length ? wkClean(idx.map((i) => (blocks[i].level ? "■ " : "") + wkText(blocks[i].el)).filter((t) => t.trim()).join("\n\n")) : highlighted();
+    if (!text || !page) return;
+    const from = `— from “${page.title}” on ${page.site || wikiHost(page.url)}\n${page.url}`;
+    const sub = idx.length && blocks[idx[0]].level ? blocks[idx[0]].heading : null;
+    const notes = [...game.notes].sort(byUpdated);
+    const sd = document.createElement("dialog");
+    sd.innerHTML = `<h3 style="margin-top:0">Add to a note</h3><div class="preview" style="max-height:28vh">${esc(text)}</div>
+      <label>New note called</label><div class="toolbar"><input id="sdTitle" style="flex:1" maxlength="120" value="${esc(sub && sub !== page.title ? `${page.title}: ${sub}` : page.title)}"><button class="primary" id="sdNew">＋ New note</button></div>
+      ${notes.length ? `<label>Or add it to the end of</label><div class="toolbar"><select id="sdNote" style="flex:1">${notes.map((n) => `<option value="${esc(n.id)}">${esc(kindOf(n.kind)[1])} ${esc(n.title || "Untitled")}</option>`).join("")}</select><button id="sdAppend">Add to it</button></div>` : ""}
+      <div class="actions toolbar"><span style="flex:1"></span><button id="sdCancel">Cancel</button></div>`;
+    dlg.appendChild(sd); sd.showModal();
+    const finish = async (msg) => {
+      sd.close(); sd.remove(); picked.clear(); selecting = false; window.getSelection()?.removeAllRanges(); paintPicks(); paintBar();
+      await save(); toast(msg);
+    };
+    $("#sdCancel", sd).onclick = () => { sd.close(); sd.remove(); };
+    $("#sdNew", sd).onclick = () => {
+      const title = $("#sdTitle", sd).value.trim(); if (!title) return $("#sdTitle", sd).focus();
+      const now = Date.now();
+      game.notes.push({ id: uid(), kind: "guide", folderId: null, title, body: `${text}\n\n${from}`, tags: ["wiki"], screenshots: [], recordings: [], checklist: [], pinned: false, spoiler: false, createdAt: now, updatedAt: now, launchNumber: null });
+      finish(`Saved as “${title}”`);
+    };
+    if ($("#sdAppend", sd)) $("#sdAppend", sd).onclick = () => {
+      const n = game.notes.find((x) => x.id === $("#sdNote", sd).value); if (!n) return;
+      const before = (n.body || "").replace(/\s+$/, "");
+      n.body = `${before ? before + "\n\n" : ""}${text}\n\n${from}`; n.updatedAt = Date.now();
+      finish(`Added to “${n.title}”`);
+    };
+  };
+
+  $("#wkClose", dlg).onclick = () => dlg.close();
+  $("#wkBack", dlg).onclick = () => { if (selecting) { selecting = false; paintBar(); return; } const prev = history.pop(); if (prev) show(prev, false); else dlg.close(); };
+  $("#wkSite", dlg).onclick = pickWiki;
+  $("#wkForm", dlg).onsubmit = (e) => { e.preventDefault(); const q = $("#wkQ", dlg).value.trim(); if (q && site) show({ search: q }); $("#wkQ", dlg).blur(); };
+  $("#wkSel", dlg).onclick = () => { if (!page) return; selecting = !selecting; window.getSelection()?.removeAllRanges(); body.classList.toggle("wk-selecting", selecting); paintBar(); };
+  $("#wkClear", dlg).onclick = () => { picked.clear(); paintPicks(); paintBar(); };
+  $("#wkAdd", dlg).onclick = addToNote;
+
+  try { site = await wikiFor(appId, gameName); } catch (err) { body.innerHTML = `<p>⚠️ ${esc(err.message)}</p>`; }
+  if (!site) { if (!body.textContent.trim()) body.innerHTML = '<p class="meta">No wiki found by name.</p>'; return pickWiki(); }
+  $("#wkSite span", dlg).textContent = site.name;
+  $("#wkQ", dlg).placeholder = `Search ${site.name}…`;
+  show(view?.page ? { page: view.page } : view?.search ? { search: view.search } : { page: site.home });
+  return dlg;
 }
 
 // ---------- version history / recently deleted ----------
