@@ -225,6 +225,9 @@ class Sync:
     def reader_page(self, url: str, refresh: bool = False) -> dict:
         return self._request("GET", f"/api/reader?url={_q(url)}" + ("&refresh=1" if refresh else ""), timeout=45)
 
+    def wiki(self, what: str, **params) -> dict:
+        return self._request("GET", f"/api/wiki/{what}?" + "&".join(f"{k}={_q(str(v))}" for k, v in params.items()), timeout=45)
+
     def reader_settings(self):
         """The server's reader cache settings, or None if this account isn't an admin there."""
         try:

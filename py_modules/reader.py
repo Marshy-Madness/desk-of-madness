@@ -22,6 +22,9 @@ MAX_HTML = 1_500_000
 USER_AGENT = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
               "Chrome/126.0 Safari/537.36")
 
+# wiki.gg turns away browser-looking agents on its API; MediaWiki asks API users to say who they are.
+API_USER_AGENT = "DeskOfMadness/0.3 (+https://github.com/Marshy-Madness/desk-of-madness)"
+
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"}
 # Never part of an article.
 DROP = {"script", "style", "noscript", "iframe", "frame", "frameset", "object", "embed", "applet", "form", "button",
@@ -204,6 +207,70 @@ def _junk(n: Node) -> bool:
     return text < 4000 or _link_density(n, text) > 0.4
 
 
+def _cls(n, word: str) -> bool:
+    return isinstance(n, Node) and word in n.attrs.get("class", "").split()
+
+
+def _infobox_table(box: Node) -> Node:
+    """Fandom's portable infobox (an <aside>, which would be dropped) as a plain two-column table."""
+    table = Node("table", {"class": "infobox"})
+    body = Node("tbody", parent=table)
+    table.children.append(body)
+
+    def row(*cells):
+        tr = Node("tr", parent=body)
+        for tag, kids, span in cells:
+            cell = Node(tag, {"colspan": "2"} if span else {}, tr)
+            for k in kids:
+                if isinstance(k, Node):
+                    k.parent = cell
+                cell.children.append(k)
+            tr.children.append(cell)
+        body.children.append(tr)
+
+    images = 0
+    stack = list(reversed(box.children))
+    while stack:
+        n = stack.pop()
+        if not isinstance(n, Node):
+            continue
+        if _cls(n, "pi-title"):
+            cap = Node("caption", parent=table)
+            cap.children = n.children
+            table.children.insert(0, cap)
+        elif _cls(n, "pi-image") or n.tag == "figure":
+            if images == 0:  # tabbed infoboxes repeat the picture for every tab
+                row(("td", [n], True))
+            images += 1
+        elif _cls(n, "pi-header"):
+            row(("th", n.children, True))
+        elif _cls(n, "pi-data"):
+            label = next((c for c in n.children if _cls(c, "pi-data-label")), None)
+            value = next((c for c in n.children if _cls(c, "pi-data-value")), None)
+            if value is not None:
+                row(("th", label.children, False), ("td", value.children, False)) if label is not None \
+                    else row(("td", value.children, True))
+        elif _cls(n, "pi-smart-group"):
+            labels = [c for c in n.iter() if _cls(c, "pi-smart-data-label")]
+            values = [c for c in n.iter() if _cls(c, "pi-smart-data-value")]
+            for i, v in enumerate(values):
+                if i < len(labels):
+                    row(("th", labels[i].children, False), ("td", v.children, False))
+                else:
+                    row(("td", v.children, True))
+        else:
+            stack.extend(reversed(n.children))
+    return table
+
+
+def _infoboxes(root: Node):
+    for n in list(root.iter()):
+        if n.tag == "aside" and _cls(n, "portable-infobox") and n.parent is not None:
+            t = _infobox_table(n)
+            t.parent = n.parent
+            n.parent.children[n.parent.children.index(n)] = t
+
+
 def _clean(node: Node):
     keep = []
     for c in node.children:
@@ -366,15 +433,15 @@ WIKI_HOSTS = re.compile(r"(\.|^)(fandom\.com|wiki\.gg|wikipedia\.org|wiktionary\
 
 def _wiki(url: str, context=None):
     parts = urllib.parse.urlsplit(url)
-    m = re.match(r"^/(?:[a-z-]+/)?wiki/(.+)$", parts.path)
-    if not m:
+    m = re.match(r"^/(?:[a-z-]+/)?(?:wiki|w)/(.+)$", parts.path)
+    if not m or m.group(1).endswith(".php"):
         return None
     title = urllib.parse.unquote(m.group(1))
     lang = re.match(r"^/([a-z-]+)/wiki/", parts.path)
     for api in ([f"/{lang.group(1)}/api.php"] if lang else []) + ["/api.php", "/w/api.php"]:
         q = urllib.parse.urlencode({"action": "parse", "page": title, "format": "json", "formatversion": "2",
                                     "prop": "text|displaytitle", "redirects": "1", "disableeditsection": "1"})
-        req = urllib.request.Request(f"{parts.scheme}://{parts.netloc}{api}?{q}", headers={"User-Agent": USER_AGENT})
+        req = urllib.request.Request(f"{parts.scheme}://{parts.netloc}{api}?{q}", headers={"User-Agent": API_USER_AGENT})
         try:
             with urllib.request.urlopen(req, timeout=20, context=context) as resp:
                 data = __import__("json").loads(resp.read(MAX_BYTES))
@@ -396,7 +463,7 @@ def extract(url: str, context=None) -> dict:
     if not re.match(r"^https?://", url or "", re.I):
         raise ValueError("Only web links (http or https) can be opened")
     host = urllib.parse.urlsplit(url).hostname or ""
-    if WIKI_HOSTS.search(host):
+    if WIKI_HOSTS.search(host) or re.match(r"^/(?:[a-z-]+/)?(?:wiki|w)/[^?]", urllib.parse.urlsplit(url).path):
         r = _wiki(url, context)
         if r:
             return r
@@ -420,6 +487,7 @@ def extract_html(url: str, page: str) -> dict:
     except Exception:
         pass  # html.parser copes with nearly anything; keep whatever it built
     root = tb.root
+    _infoboxes(root)
     _clean(root)
     best = _pick(root)
     out = []

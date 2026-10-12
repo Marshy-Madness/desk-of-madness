@@ -5,7 +5,7 @@ import type { routerHook, toaster } from "@decky/api";
 import type { TomeDef } from "../tomes/registry";
 import type { Line, Buttons, Btn, Hint } from "../tomes/bits";
 import type { MainMenuHook, QamTabsHook } from "./hooks";
-import type { SteamNewsItem, WorkshopSummary } from "../types";
+import type { Game, Note, ReaderPage, SteamNewsItem, WikiResult, WikiSite, WorkshopSummary } from "../types";
 
 // What a code Scroll gets. A Scroll's code is a function `activate(desk)` (the default export of its
 // index.tsx, see scrolls/README.md); it may return a cleanup. Everything it adds through `desk` is removed
@@ -53,6 +53,44 @@ export interface DeskScrollApi {
   workshopEntries(params: Record<string, string>): Promise<WorkshopSummary[]>;
   /** Shows a Workshop post in Desk's reader. */
   openWorkshopEntry(id: string, appId: string): void;
+  /** Reader view pages: made and cached by the sync server (or on the Deck without one). Since 0.3.2-beta.2. */
+  reader: {
+    page(url: string, refresh?: boolean): Promise<ReaderPage>;
+    /** A page's `html` as React elements; it's rebuilt from a whitelist, never handed to innerHTML. */
+    elements(html: string): React.ReactNode;
+    /** Styles for elements(), scoped to a `className="sn-reader"` box. */
+    css: string;
+  };
+  /** MediaWiki sites (Fandom, wiki.gg, Wikipedia…), through the sync server. Read their pages with reader.page. Since 0.3.2-beta.2. */
+  wiki: {
+    /** Wikis for a game, best first. */
+    find(gameName: string): Promise<WikiSite[]>;
+    /** The wiki an address (or bare host name) is on; throws if it isn't one. */
+    site(url: string): Promise<WikiSite>;
+    search(wiki: string, q: string): Promise<WikiResult[]>;
+  };
+  /** The game being played, if any. Since 0.3.2-beta.2. */
+  runningGame(): { appId: string; name: string } | null;
+  useRunningGame(): { appId: string; name: string } | null;
+  /** The person's notes. Since 0.3.2-beta.2. */
+  notes: {
+    game(appId: string): Promise<Game>;
+    /** Saves a note (new or changed) and refreshes everything showing notes. */
+    save(appId: string, note: Note): Promise<void>;
+    /** Writes a new note; `gameName` adds the game to Desk first if it isn't there yet. */
+    create(appId: string, gameName: string, fields: Partial<Note> & { title: string; body: string }): Promise<Note>;
+    /** Shows a note in Desk's note viewer. */
+    open(appId: string, noteId: string): Promise<void>;
+  };
+  /** For a full-screen page added with addRoute. Since 0.3.2-beta.2. */
+  page: {
+    /** Call in the page's component: it counts as one of Desk's pages (the combo puts it away) and the trackpads work as a mouse. */
+    useDeskPage(): void;
+    /** Steam's header and footer heights, to pad the page by. */
+    useChromeHeights(): { header: number; footer: number };
+    /** Puts the page away: back to the game, or wherever you were. */
+    close(): void;
+  };
   /** Asks for a line of text; null if cancelled. */
   askText(heading: string, label?: string, initial?: string): Promise<string | null>;
 

@@ -1,0 +1,10 @@
+{
+  "name": "Wiki",
+  "icon": "📖",
+  "version": "1.0.0",
+  "summary": "Read your game's wiki without ads, search it, and save the parts you need into your notes.",
+  "description": "Finds the wiki for the game you're playing (Fandom, wiki.gg, or any MediaWiki address you type; Wikipedia otherwise) and shows its pages in Desk's reader view: just the article, with infoboxes kept as tables. Your Desk server fetches and keeps each page, so it opens instantly next time on every device.\n\nSearch with X, follow wiki links right in the page, and press X on a page to select parts: a heading picks its whole section, or pick single paragraphs, lists and tables. Then add them to a new note or the end of an existing one; the note keeps a link back to the page.\n\nThe Wiki Tome on your Desk has Search, the wiki's main page and the pages you read last.",
+  "author": "MarshyMadness",
+  "minDesk": "0.3.2-beta.2",
+  "permissions": ["tomes", "network"]
+}

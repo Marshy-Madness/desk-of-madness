@@ -30,6 +30,7 @@ import reader_cache
 import speech
 import controls
 import steam
+import wiki
 from accounts import OWNER_ID, Accounts, check_password
 
 DATA = os.environ.get("DATA_DIR", "/data")
@@ -837,6 +838,19 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(422, {"error": str(err)})
             except Exception as err:
                 return self.send(502, {"error": f"Couldn't make a reader view: {err}"})
+        if len(p) == 3 and p[1] == "wiki" and p[2] in ("find", "site", "search"):  # the 📖 Wiki Scroll
+            q = self.query()
+            try:
+                if p[2] == "find":  # GET /api/wiki/find?name=: wikis for a game, best first
+                    return self.send(200, {"wikis": wiki.find(q.get("name", ""))})
+                if p[2] == "site":  # GET /api/wiki/site?url=: the wiki an address is on
+                    return self.send(200, wiki.site(q.get("url", "")))
+                # GET /api/wiki/search?wiki=&q=: pages on that wiki
+                return self.send(200, {"results": wiki.search(q.get("wiki", ""), q.get("q", ""), int(q.get("limit") or 20))})
+            except ValueError as err:
+                return self.send(422, {"error": str(err)})
+            except Exception as err:
+                return self.send(502, {"error": f"Couldn't reach the wiki: {err}"})
         if p[1:] == ["games"]:
             return self.send(200, self.list_games(store))
         if len(p) == 3 and p[1] == "games":

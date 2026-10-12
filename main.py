@@ -14,6 +14,7 @@ from workshop import Workshop
 from overlay import Overlay
 from buttons import Buttons
 import reader
+import wiki
 import news
 import screenshot
 import scrolls
@@ -264,20 +265,38 @@ class Plugin:
         return self.sync.status()
 
     # reader view for links in notes: made and cached by the server, or right here if there's no server
-    async def reader_page(self, url: str, refresh: bool = False):
-        def run():
-            if storage.get_settings().get("syncUrl"):
-                try:
-                    return {**self.sync.reader_page(url, refresh), "source": "server"}
-                except RuntimeError as e:
-                    # The server already tried the site; only an unreachable or older server is worth retrying here.
-                    if not re.search(r"Server error (404|5\d\d)|Can't reach|No server|rejected", str(e)):
-                        raise
+    def _server_or_here(self, on_server, here):
+        """Asks the sync server, or does it on the Deck when there's no server or it can't (unreachable, older)."""
+        if storage.get_settings().get("syncUrl"):
             try:
-                return {**reader.extract(url, context=SSL_CONTEXT), "cached": False, "source": "device"}
-            except ValueError as e:
-                raise RuntimeError(str(e))
-        return await asyncio.to_thread(run)
+                return on_server()
+            except RuntimeError as e:
+                # The server already tried the site; only an unreachable or older server is worth retrying here.
+                if not re.search(r"Server error (404|5\d\d)|Can't reach|No server|rejected", str(e)):
+                    raise
+        try:
+            return here()
+        except ValueError as e:
+            raise RuntimeError(str(e))
+
+    async def reader_page(self, url: str, refresh: bool = False):
+        return await asyncio.to_thread(self._server_or_here,
+                                       lambda: {**self.sync.reader_page(url, refresh), "source": "server"},
+                                       lambda: {**reader.extract(url, context=SSL_CONTEXT), "cached": False, "source": "device"})
+
+    # wikis for the 📖 Wiki Scroll (pages are read with reader_page)
+    async def wiki_find(self, name: str):
+        return await asyncio.to_thread(self._server_or_here, lambda: self.sync.wiki("find", name=name)["wikis"],
+                                       lambda: wiki.find(name, context=SSL_CONTEXT))
+
+    async def wiki_site(self, url: str):
+        return await asyncio.to_thread(self._server_or_here, lambda: self.sync.wiki("site", url=url),
+                                       lambda: wiki.site(url, context=SSL_CONTEXT))
+
+    async def wiki_search(self, wiki_url: str, q: str):
+        return await asyncio.to_thread(self._server_or_here,
+                                       lambda: self.sync.wiki("search", wiki=wiki_url, q=q)["results"],
+                                       lambda: wiki.search(wiki_url, q, context=SSL_CONTEXT))
 
     async def reader_settings(self):
         if not storage.get_settings().get("syncUrl"):

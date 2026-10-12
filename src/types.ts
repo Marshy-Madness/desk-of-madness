@@ -354,6 +354,25 @@ export interface ReaderPage {
   source?: "server" | "device";
 }
 
+/** A MediaWiki site (Fandom, wiki.gg, Wikipedia…), for the 📖 Wiki Scroll. */
+export interface WikiSite {
+  /** https://host[/lang] */
+  base: string;
+  api: string;
+  name: string;
+  /** The main page's address. */
+  home: string;
+  logo: string | null;
+  /** A page's address with $1 for its title. */
+  articlePath: string;
+}
+
+export interface WikiResult {
+  title: string;
+  url: string;
+  snippet: string;
+}
+
 /** The server's reader cache settings (admins only). readerCacheDays 0 = never delete. */
 export interface ReaderCacheSettings {
   readerCacheDays: number;

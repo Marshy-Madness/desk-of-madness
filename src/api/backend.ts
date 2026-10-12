@@ -1,5 +1,5 @@
 import { call } from "@decky/api";
-import { DockerContainer, HomeEntity, NoteHit, DeskLayout, InstalledScroll, SteamNewsItem, WorkshopScroll, WorkshopEntry, WorkshopGame, WorkshopPack, WorkshopSummary, WorkshopUser, ServerUser, Share, BackupStatus, Counter, DeletedNote, Folder, NoteVersion, LeftOff, Game, GameSummary, Note, Recording, Screenshot, Settings, SteamScreenshot, ReaderPage, ReaderCacheSettings } from "../types";
+import { DockerContainer, HomeEntity, NoteHit, DeskLayout, InstalledScroll, SteamNewsItem, WorkshopScroll, WorkshopEntry, WorkshopGame, WorkshopPack, WorkshopSummary, WorkshopUser, ServerUser, Share, BackupStatus, Counter, DeletedNote, Folder, NoteVersion, LeftOff, Game, GameSummary, Note, Recording, Screenshot, Settings, SteamScreenshot, ReaderPage, ReaderCacheSettings, WikiSite, WikiResult } from "../types";
 
 export const backend = {
   importNotice: () => call<[], { from: string } | null>("import_notice"),
@@ -63,6 +63,9 @@ export const backend = {
   backupStatus: () => call<[], BackupStatus>("backup_status"),
 
   readerPage: (url: string, refresh = false) => call<[string, boolean], ReaderPage>("reader_page", url, refresh),
+  wikiFind: (name: string) => call<[string], WikiSite[]>("wiki_find", name),
+  wikiSite: (url: string) => call<[string], WikiSite>("wiki_site", url),
+  wikiSearch: (wiki: string, q: string) => call<[string, string], WikiResult[]>("wiki_search", wiki, q),
   /** null when there's no server or this account isn't an admin on it. */
   readerSettings: () => call<[], ReaderCacheSettings | null>("reader_settings"),
   setReaderCacheDays: (days: number) => call<[number], ReaderCacheSettings>("set_reader_cache_days", days),

@@ -9,7 +9,13 @@ import { registerTome, TomeProps } from "../tomes/registry";
 import { Btn, Buttons, Hint, Line, ellipsis } from "../tomes/bits";
 import { onMainMenu, onQamTabs, openWorkshopEntry, qamTabsAvailable } from "./hooks";
 import { openLink } from "../browser";
-import { showPage } from "../opening";
+import { closeNotesPage, setNotesPageMounted, showPage } from "../opening";
+import { getRunningGame, useRunningGame } from "../hooks/useAppLifetime";
+import { articleElements, READER_CSS } from "../components/ReaderArticle";
+import { openNote } from "../noteActions";
+import { useChromeHeights } from "../steamWindow";
+import { useTrackpadMouse } from "../trackpads";
+import { newId } from "../utils/format";
 import { NameModal } from "../components/NameModal";
 import { InstalledScroll, ScrollState, WorkshopPack } from "../types";
 import { errText } from "../utils/errors";
@@ -131,6 +137,51 @@ function makeApi(scroll: InstalledScroll, r: Running): DeskScrollApi {
     steamNews: (appId, count) => backend.steamNews(appId, count),
     workshopEntries: (params) => backend.bsEntries(params),
     openWorkshopEntry,
+    reader: {
+      page: (url, refresh) => backend.readerPage(url, !!refresh),
+      elements: articleElements,
+      css: READER_CSS,
+    },
+    wiki: {
+      find: (name) => backend.wikiFind(name),
+      site: (url) => backend.wikiSite(url),
+      search: (wiki, q) => backend.wikiSearch(wiki, q),
+    },
+    runningGame: getRunningGame,
+    useRunningGame,
+    notes: {
+      game: (appId) => backend.getGame(appId),
+      save: async (appId, note) => {
+        await backend.saveNote(appId, note);
+        emitDataChanged();
+      },
+      create: async (appId, gameName, fields) => {
+        if (gameName) await backend.ensureGame(appId, gameName);
+        const note = await backend.saveNote(appId, {
+          id: newId(), folderId: null, tags: [], screenshots: [], recordings: [], pinned: false,
+          createdAt: 0, updatedAt: 0, launchNumber: null, ...fields,
+        });
+        emitDataChanged();
+        return note;
+      },
+      open: async (appId, noteId) => {
+        const game = await backend.getGame(appId);
+        const note = game.notes.find((n) => n.id === noteId);
+        if (!note) throw new Error("That note is gone");
+        openNote(game, note);
+      },
+    },
+    page: {
+      useDeskPage: function useDeskPage() {
+        useTrackpadMouse();
+        useEffect(() => {
+          setNotesPageMounted(true);
+          return () => setNotesPageMounted(false);
+        }, []);
+      },
+      useChromeHeights,
+      close: closeNotesPage,
+    },
     askText: (heading, label, initial) =>
       new Promise((resolve) => showModal(<AskModal heading={heading} label={label} initial={initial} resolve={resolve} />)),
     onUnload: (fn) => r.cleanups.push(fn),

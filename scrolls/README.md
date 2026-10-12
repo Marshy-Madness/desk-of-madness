@@ -60,7 +60,8 @@ export default function activate(desk: DeskScrollApi) {
 
 `desk` (see `src/scrolls/api.ts`) gives you Tomes, the Scroll's own synced settings and a ⚙ Settings page, Quick Access
 tab and main-menu hooks, routes and route patches (`/library/app/:appid` and so on), Steam news, Workshop posts, the
-reader view, and `disable(reason)` for when Steam or Decky changed and your hooks aren't there. Everything added through
+reader view (pages from the server and safe rendering), wikis, the person's notes, helpers for full-screen pages, and
+`disable(reason)` for when Steam or Decky changed and your hooks aren't there. Everything added through
 `desk` is removed when the Scroll is turned off, so it can be switched without restarting. `react`, `react/jsx-runtime`
 and `@decky/ui` come from Steam and Decky; other packages are bundled in.
 
@@ -72,6 +73,10 @@ The official Scrolls:
   Decky's list into folders. It patches Decky's own UI, so it starts off and turns itself off if Decky's parts move.
 - **📰 Game News** (`game-news`): a News section on games' library pages (Steam's news and patch notes plus new
   Workshop books, hideable per game) and a Game News Tome.
+- **📖 Wiki** (`wiki`): the game's wiki (found by name on wiki.gg and Fandom, or any MediaWiki address; Wikipedia
+  otherwise) read through the server's reader view, searchable, with wiki links opening in place. Select mode picks
+  headings (whole sections), paragraphs, lists and tables and saves them as plain text to a new or existing note,
+  with a link back. Needs Desk 0.3.2-beta.2 (the `/api/wiki/*` server endpoints and `py_modules/wiki.py`).
 
 ## The signing key
 
