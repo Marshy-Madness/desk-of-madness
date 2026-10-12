@@ -11,7 +11,8 @@ import { AudioButton } from "./AudioButton";
 import { Transcripts } from "./Transcripts";
 import * as s from "./styles";
 import { openOverlayModal } from "./OverlayModal";
-import { LinkedText } from "./LinkedText";
+import { FormattedText } from "./FormattedText";
+import { TablesView } from "./NoteTables";
 import { isNoteOnWheel, toggleNoteOnWheel } from "../radial/items";
 
 const ImageModal: FC<{ appId: string; file: string; closeModal?: () => void }> = ({ appId, file, closeModal }) => (
@@ -127,18 +128,15 @@ export const NoteViewer: FC<{
             );
           }
           return part.trim() ? (
-            <LinkedText
-              key={i}
-              text={part.replace(/^\n+|\n+$/g, "")}
-              from={{ appId, noteId: note.id, noteTitle: note.title }}
-              style={{ whiteSpace: "pre-wrap", fontSize: "14px", lineHeight: 1.4 }}
-            />
+            <FormattedText key={i} text={part} from={{ appId, noteId: note.id, noteTitle: note.title }} />
           ) : (
             <Fragment key={i} />
           );
         })}
-        {!note.body.trim() && !note.checklist?.length && <div style={{ opacity: 0.6 }}>No information yet.</div>}
+        {!note.body.trim() && !note.checklist?.length && !note.tables?.length && <div style={{ opacity: 0.6 }}>No information yet.</div>}
       </Focusable>
+
+      <TablesView tables={note.tables} />
 
       {note.checklist && note.checklist.length > 0 && (
         <Focusable style={{ marginBottom: "12px" }}>

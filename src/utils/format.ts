@@ -1,3 +1,4 @@
+import { stripMarkup } from "./markup";
 import { GameSummary, Note, SortMode } from "../types";
 
 export function formatDate(ms: number | null | undefined): string {
@@ -52,7 +53,7 @@ export function firstLine(body: string): string {
   return (
     body
       .split("\n")
-      .map((l) => l.replace(/\[img:\d+\]/g, "").trim())
+      .map((l) => stripMarkup(l.replace(/\[img:\d+\]/g, "")).trim())
       .find(Boolean) ?? ""
   );
 }

@@ -1,6 +1,6 @@
 import { cloneElement, createElement, FC, ReactElement, useEffect } from "react";
 import { showModal } from "@decky/ui";
-import { ChecklistItem, NoteKind, Recording, Screenshot } from "../types";
+import { ChecklistItem, NoteKind, NoteTable, Recording, Screenshot } from "../types";
 import { holdTrackpadMouse } from "../trackpads";
 import { NotesPlace, setPlace } from "./place";
 
@@ -15,6 +15,7 @@ export interface EditorDraft {
   folderId: string | null;
   screenshots: Screenshot[];
   checklist: ChecklistItem[];
+  tables?: NoteTable[];
   spoiler: boolean;
   kind: NoteKind;
   recordings: Recording[];

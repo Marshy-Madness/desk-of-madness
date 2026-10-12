@@ -20,6 +20,16 @@ export interface ChecklistItem {
   done: boolean;
 }
 
+/** A grid of cells kept next to the note's information. Row 0 of `rows` is not special; `columns` are the headings. */
+export interface NoteTable {
+  id: string;
+  title: string;
+  columns: string[];
+  rows: string[][];
+  /** Shown open when reading the note; otherwise it's a line you open. */
+  showInView?: boolean;
+}
+
 export type NoteKind =
   | "note"
   | "guide"
@@ -46,6 +56,7 @@ export interface Note {
   /** Which launch of the game this note was written during. */
   launchNumber: number | null;
   checklist?: ChecklistItem[];
+  tables?: NoteTable[];
   /** Hidden behind a "reveal" until you choose to look. */
   spoiler?: boolean;
   /** What sort of note this is; "note" when missing. Guides also show in the virtual Guides folder. */

@@ -1,6 +1,6 @@
 import { FC } from "react";
 import { Focusable } from "@decky/ui";
-import { FaThumbtack, FaMicrophone, FaCamera, FaCheckSquare, FaEyeSlash } from "react-icons/fa";
+import { FaThumbtack, FaMicrophone, FaCamera, FaCheckSquare, FaTable, FaEyeSlash } from "react-icons/fa";
 import { Note } from "../types";
 import { firstLine, formatWhen } from "../utils/format";
 import { MediaImage } from "./MediaImage";
@@ -48,6 +48,11 @@ export const NoteItem: FC<{
           {note.checklist && note.checklist.length > 0 && (
             <span style={s.chip}>
               <FaCheckSquare size={9} /> {done}/{note.checklist.length}
+            </span>
+          )}
+          {(note.tables?.length ?? 0) > 0 && (
+            <span style={s.chip}>
+              <FaTable size={9} /> {note.tables!.length}
             </span>
           )}
           {note.recordings.length > 0 && (

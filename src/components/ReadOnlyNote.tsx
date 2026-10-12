@@ -8,7 +8,8 @@ import { AudioButton } from "./AudioButton";
 import { Transcripts } from "./Transcripts";
 import { MediaImage, MediaLoader } from "./MediaImage";
 import * as s from "./styles";
-import { LinkedText } from "./LinkedText";
+import { FormattedText } from "./FormattedText";
+import { TablesView } from "./NoteTables";
 
 const ImageModal: FC<{ appId: string; file: string; loader?: MediaLoader; closeModal?: () => void }> = ({
   appId,
@@ -95,16 +96,12 @@ export const ReadOnlyNote: FC<{
                 );
               }
               return part.trim() ? (
-                <LinkedText
-                  key={i}
-                  text={part.replace(/^\n+|\n+$/g, "")}
-                  beforeOpen={closeModal}
-                  style={{ whiteSpace: "pre-wrap", fontSize: "14px", lineHeight: 1.4 }}
-                />
+                <FormattedText key={i} text={part} beforeOpen={closeModal} />
               ) : (
                 <Fragment key={i} />
               );
             })}
+            <TablesView tables={note.tables} />
             {note.checklist && note.checklist.length > 0 && (
               <div style={{ marginTop: "10px", fontSize: "14px" }}>
                 {note.checklist.map((c) => (

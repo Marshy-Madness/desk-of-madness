@@ -1,9 +1,10 @@
-import { FC, useEffect, useRef, useState } from "react";
+import { FC, ReactNode, useEffect, useRef, useState } from "react";
 import { ModalRoot, DialogButton, Dropdown, Focusable, TextField, ToggleField, showModal, ConfirmModal } from "@decky/ui";
-import { FaCrop, FaCamera, FaMicrophone, FaMicrophoneAlt, FaStop, FaTrash, FaParagraph, FaPlus, FaCheckSquare, FaRegSquare, FaFileAlt } from "react-icons/fa";
+import { FaCrop, FaCamera, FaMicrophone, FaMicrophoneAlt, FaStop, FaTrash, FaParagraph, FaPlus, FaCheckSquare, FaRegSquare, FaFileAlt,
+  FaBold, FaItalic, FaUnderline, FaStrikethrough, FaHighlighter, FaCode, FaHeading, FaListUl, FaListOl, FaQuoteRight, FaMinus } from "react-icons/fa";
 import { toaster } from "@decky/api";
 import { backend } from "../api/backend";
-import { ChecklistItem, Folder, Note, NoteKind, Recording, Screenshot } from "../types";
+import { ChecklistItem, Folder, Note, NoteKind, NoteTable, Recording, Screenshot } from "../types";
 import { KINDS } from "../utils/kinds";
 import { formatClock, newId } from "../utils/format";
 import { useSessionTimer } from "../hooks/useSessionTimer";
@@ -17,6 +18,23 @@ import { ScreenshotPicker } from "./ScreenshotPicker";
 import { CropModal } from "./CropModal";
 import * as s from "./styles";
 import { errText } from "../utils/errors";
+import { applyFormat, Format } from "../utils/markup";
+import { keepTables, TablesEditor } from "./NoteTables";
+
+const FORMATS: { fmt: Format; icon: ReactNode; label: string }[] = [
+  { fmt: "bold", icon: <FaBold size={14} />, label: "Bold" },
+  { fmt: "italic", icon: <FaItalic size={14} />, label: "Italic" },
+  { fmt: "underline", icon: <FaUnderline size={14} />, label: "Underline" },
+  { fmt: "strike", icon: <FaStrikethrough size={14} />, label: "Strike through" },
+  { fmt: "mark", icon: <FaHighlighter size={14} />, label: "Highlight" },
+  { fmt: "h1", icon: <FaHeading size={16} />, label: "Heading" },
+  { fmt: "h2", icon: <FaHeading size={12} />, label: "Small heading" },
+  { fmt: "bullet", icon: <FaListUl size={14} />, label: "Bullet list" },
+  { fmt: "number", icon: <FaListOl size={14} />, label: "Numbered list" },
+  { fmt: "quote", icon: <FaQuoteRight size={14} />, label: "Quote" },
+  { fmt: "code", icon: <FaCode size={14} />, label: "Code" },
+  { fmt: "rule", icon: <FaMinus size={14} />, label: "Divider line" },
+];
 
 /** Drop the marker for screenshot `index` (1-based) and renumber the ones after it. */
 function removeImageMarker(body: string, index: number): string {
@@ -56,6 +74,7 @@ export const NoteEditor: FC<{
   const [folderId, setFolderId] = useState<string | null>(draft ? draft.folderId : note?.folderId ?? initialFolder);
   const [screenshots, setScreenshots] = useState<Screenshot[]>(draft?.screenshots ?? note?.screenshots ?? initialScreenshots);
   const [checklist, setChecklist] = useState<ChecklistItem[]>(draft?.checklist ?? note?.checklist ?? []);
+  const [tables, setTables] = useState<NoteTable[]>(draft?.tables ?? note?.tables ?? []);
   const [newItem, setNewItem] = useState("");
   const [spoiler, setSpoiler] = useState(draft?.spoiler ?? note?.spoiler ?? false);
   const [kind, setKind] = useState<NoteKind>(draft?.kind ?? note?.kind ?? defaultKind ?? "note");
@@ -77,8 +96,8 @@ export const NoteEditor: FC<{
 
   // Keep the edits somewhere safe, so putting Desk of Madness away with the button combo doesn't lose them.
   useEffect(() => {
-    saveDraft({ title, body, tags, folderId, screenshots, checklist, spoiler, kind, recordings, added: added.current });
-  }, [title, body, tags, folderId, screenshots, checklist, spoiler, kind, recordings]);
+    saveDraft({ title, body, tags, folderId, screenshots, checklist, tables, spoiler, kind, recordings, added: added.current });
+  }, [title, body, tags, folderId, screenshots, checklist, tables, spoiler, kind, recordings]);
 
   const stopRecording = async () => {
     setRecordStart(null);
@@ -157,6 +176,15 @@ export const NoteEditor: FC<{
     setRecordings((list) => list.filter((r) => r !== rec));
   };
 
+  /** Formats the selected words, or the line the cursor is on (the textarea keeps its selection while a button has focus). */
+  const format = (fmt: Format) => {
+    const el = bodyRef.current;
+    const [start, end] = el ? [el.selectionStart, el.selectionEnd] : [body.length, body.length];
+    const next = applyFormat(body, start, end, fmt);
+    setBody(next.body);
+    requestAnimationFrame(() => bodyRef.current?.setSelectionRange(next.start, next.end));
+  };
+
   const insertImage = (index: number) => {
     setBody((b) => `${b}${b && !b.endsWith("\n") ? "\n" : ""}[img:${index + 1}]\n`);
   };
@@ -191,6 +219,7 @@ export const NoteEditor: FC<{
       updatedAt: 0,
       launchNumber: note?.launchNumber ?? null,
       checklist: checklist.length ? checklist : undefined,
+      tables: keepTables(tables).length ? keepTables(tables) : undefined,
       spoiler,
       kind,
       source: note?.source,
@@ -207,7 +236,8 @@ export const NoteEditor: FC<{
       title !== (note?.title ?? "") ||
       body !== (note?.body ?? "") ||
       added.current.length > 0 ||
-      checklist.length !== (note?.checklist?.length ?? 0);
+      checklist.length !== (note?.checklist?.length ?? 0) ||
+      JSON.stringify(keepTables(tables)) !== JSON.stringify(note?.tables ?? []);
     if (!dirty) {
       cancel();
       return;
@@ -293,6 +323,21 @@ export const NoteEditor: FC<{
           }}
         />
       </Focusable>
+      <Focusable flow-children="row" style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "4px" }}>
+        {FORMATS.map((f) => (
+          <DialogButton
+            key={f.fmt}
+            style={s.iconButton}
+            onClick={() => format(f.fmt)}
+            onOKActionDescription={f.label}
+          >
+            {f.icon}
+          </DialogButton>
+        ))}
+      </Focusable>
+      <div style={{ fontSize: "12px", opacity: 0.6, marginTop: "2px" }}>
+        Select words (or put the cursor on a line), then pick a style. Typing works too: **bold**, *italic*, # heading, - list.
+      </div>
       {screenshots.length > 0 && (
         <div style={{ fontSize: "11px", opacity: 0.6, marginTop: "2px" }}>
           Tip: [img:1] in the text shows screenshot 1 at that spot.
@@ -340,6 +385,8 @@ export const NoteEditor: FC<{
           <FaPlus /> Add
         </DialogButton>
       </Focusable>
+
+      <TablesEditor tables={tables} onChange={setTables} />
 
       <ToggleField
         label="Spoiler"

@@ -6,6 +6,8 @@ import { emitDataChanged } from "../state/notesStore";
 import { DeletedNote, Note, NoteVersion } from "../types";
 import { firstLine, formatDateTime } from "../utils/format";
 import * as s from "./styles";
+import { FormattedText } from "./FormattedText";
+import { TablesView } from "./NoteTables";
 
 const Preview: FC<{ note: Note }> = ({ note }) => (
   <div style={{ background: "rgba(0,0,0,0.25)", borderRadius: "6px", padding: "10px 12px", margin: "10px 0" }}>
@@ -20,8 +22,9 @@ const Preview: FC<{ note: Note }> = ({ note }) => (
       {note.screenshots.length > 0 && <span style={s.chip}>📷 {note.screenshots.length}</span>}
       {note.recordings.length > 0 && <span style={s.chip}>🎙 {note.recordings.length}</span>}
     </div>
-    <div style={{ whiteSpace: "pre-wrap", fontSize: "13px", marginTop: "8px", maxHeight: "30vh", overflowY: "auto" }}>
-      {note.body || <span style={{ opacity: 0.6 }}>(no information)</span>}
+    <div style={{ marginTop: "8px", maxHeight: "30vh", overflowY: "auto" }}>
+      {note.body.trim() ? <FormattedText text={note.body} style={{ fontSize: "13px" }} /> : <span style={{ opacity: 0.6 }}>(no information)</span>}
+      <TablesView tables={note.tables} />
     </div>
     {note.checklist && note.checklist.length > 0 && (
       <div style={{ fontSize: "13px", marginTop: "6px" }}>

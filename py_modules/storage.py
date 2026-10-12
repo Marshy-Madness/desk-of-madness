@@ -200,7 +200,7 @@ def save_achievements(data: dict, notify: bool = True) -> dict:
 
 
 def search_notes(query: str, limit: int = 40) -> list:
-    """Notes in every game whose title, text, tags or checklist have all the words in `query`, best first."""
+    """Notes in every game whose title, text, tags, checklist or tables have all the words in `query`, best first."""
     words = [w for w in query.lower().split() if w]
     if not words:
         return []
@@ -210,7 +210,9 @@ def search_notes(query: str, limit: int = 40) -> list:
         for note in game.get("notes", []):
             title = (note.get("title") or "").lower()
             text = " ".join([title, (note.get("body") or "").lower(), " ".join(note.get("tags") or []).lower(),
-                             " ".join((i.get("text") or "").lower() for i in note.get("checklist") or [])])
+                             " ".join((i.get("text") or "").lower() for i in note.get("checklist") or []),
+                             " ".join(" ".join([t.get("title") or ""] + (t.get("columns") or []) + [c for r in t.get("rows") or [] for c in r])
+                                      for t in note.get("tables") or []).lower()])
             if not all(w in text for w in words):
                 continue
             score = sum(3 for w in words if w in title) + (5 if " ".join(words) in title else 0)
