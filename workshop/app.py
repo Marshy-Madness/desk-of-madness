@@ -127,6 +127,7 @@ def summary(e: dict) -> dict:
             "kind": e["kind"], "tags": e["tags"], "spoiler": e["spoiler"], "spoilerLabel": e["spoiler_label"] or "",
             "author": public_user(e["author"]), "likes": e["likes"], "comments": e["comments"], "allowCopy": e["allow_copy"],
             "hasScreenshots": bool(e["screenshots"]), "hasVoice": bool(e["recordings"]), "hasChecklist": bool(e["checklist"]),
+            "hasTables": bool(e["tables"]),
             "thumb": thumb, "createdAt": e["created_at"], "updatedAt": e["updated_at"],
             "pinned": e["pinned"], "locked": e["locked"], "status": e["status"], "featured": e["featured"], "copies": e["copies"]}
 
@@ -283,7 +284,7 @@ def import_bundled_scrolls():
 
 def full(e: dict, viewer) -> dict:
     out = summary(e)
-    out.update({"body": e["body"], "checklist": e["checklist"], "screenshots": e["screenshots"], "recordings": e["recordings"],
+    out.update({"body": e["body"], "checklist": e["checklist"], "tables": e["tables"], "screenshots": e["screenshots"], "recordings": e["recordings"],
                 "editPolicy": e["edit_policy"], "editors": [public_user(s) for s in e["editors"]],
                 "updatedBy": public_user(e["updated_by"]) if e["updated_by"] else None})
     out["canEdit"] = can_edit(e, viewer)
@@ -337,6 +338,25 @@ def clean_media(items, kind: str) -> list:
     return out
 
 
+def clean_tables(tables) -> list:
+    """A note's tables, trimmed to sane sizes: up to 20 tables of 30 columns by 500 rows."""
+    out = []
+    for t in (tables if isinstance(tables, list) else [])[:20]:
+        if not isinstance(t, dict):
+            continue
+        cols = [str(c)[:200] for c in (t.get("columns") or [])[:30]]
+        if not cols:
+            continue
+        rows = [[str(c)[:1000] for c in r[:len(cols)]] + [""] * max(0, len(cols) - len(r))
+                for r in (t.get("rows") or [])[:500] if isinstance(r, list)]
+        title = str(t.get("title") or "")[:120]
+        if not (title.strip() or any(c.strip() for c in cols) or any(c.strip() for r in rows for c in r)):
+            continue
+        out.append({"id": str(t.get("id") or uuid.uuid4())[:40], "title": title, "columns": cols, "rows": rows,
+                    "showInView": bool(t.get("showInView"))})
+    return out
+
+
 def clean_fields(data: dict) -> dict:
     """Validate the editable parts of an entry."""
     title = str(data.get("title", "")).strip()[:120]
@@ -347,7 +367,7 @@ def clean_fields(data: dict) -> dict:
     checklist = [{"id": str(c.get("id") or uuid.uuid4())[:40], "text": str(c.get("text", ""))[:300], "done": False}
                  for c in (data.get("checklist") or [])[:200] if str(c.get("text", "")).strip()]
     return {"title": title, "body": str(data.get("body", ""))[:50000], "kind": kind, "tags": [t for t in tags if t],
-            "checklist": checklist, "screenshots": clean_media(data.get("screenshots"), "screenshots"),
+            "checklist": checklist, "tables": clean_tables(data.get("tables")), "screenshots": clean_media(data.get("screenshots"), "screenshots"),
             "recordings": clean_media(data.get("recordings"), "recordings"),
             "spoiler": 1 if data.get("spoiler") else 0, "spoiler_label": str(data.get("spoilerLabel") or "")[:80]}
 
@@ -558,10 +578,12 @@ class Handler(BaseHTTPRequestHandler):
                 where.append("recordings != '[]'")
             if "checklist" in has:
                 where.append("checklist != '[]'")
+            if "tables" in has:
+                where.append("COALESCE(tables, '[]') != '[]'")
             if q.get("author"):
                 where.append("author=?"); args.append(q["author"])
             if q.get("q"):
-                where.append("(title LIKE ? OR body LIKE ? OR tags LIKE ? OR game_name LIKE ?)"); args += [f"%{q['q']}%"] * 4
+                where.append("(title LIKE ? OR body LIKE ? OR tags LIKE ? OR game_name LIKE ? OR tables LIKE ?)"); args += [f"%{q['q']}%"] * 5
             order = {"top": "likes DESC, updated_at DESC", "updated": "updated_at DESC", "copies": "copies DESC, likes DESC"}.get(q.get("sort"), "created_at DESC")
             if q.get("appId"):
                 order = "pinned DESC, " + order
@@ -747,11 +769,11 @@ class Handler(BaseHTTPRequestHandler):
             editors = [s for s in (data.get("editors") or []) if re.fullmatch(r"\d{17}", str(s))][:50]
             eid = uuid.uuid4().hex[:12]
             now = now_ms()
-            c.execute("INSERT INTO entries (id, app_id, game_name, title, body, kind, tags, checklist, screenshots, recordings, spoiler, "
-                      "spoiler_label, author, edit_policy, editors, allow_copy, created_at, updated_at, updated_by, status) "
-                      "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            c.execute("INSERT INTO entries (id, app_id, game_name, title, body, kind, tags, checklist, tables, screenshots, recordings, "
+                      "spoiler, spoiler_label, author, edit_policy, editors, allow_copy, created_at, updated_at, updated_by, status) "
+                      "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                       (eid, app_id, str(data.get("gameName") or app_id)[:120], fields["title"], fields["body"], fields["kind"],
-                       json.dumps(fields["tags"]), json.dumps(fields["checklist"]), json.dumps(fields["screenshots"]),
+                       json.dumps(fields["tags"]), json.dumps(fields["checklist"]), json.dumps(fields["tables"]), json.dumps(fields["screenshots"]),
                        json.dumps(fields["recordings"]), fields["spoiler"], fields["spoiler_label"], viewer, policy,
                        json.dumps(editors), 1 if data.get("allowCopy", True) else 0, now, now, viewer, status))
             c.commit()
@@ -1173,15 +1195,15 @@ class Handler(BaseHTTPRequestHandler):
                     return self.err(403, "You can't edit this one")
                 data = self.json_body()
                 current = {"title": e["title"], "body": e["body"], "kind": e["kind"], "tags": e["tags"], "checklist": e["checklist"],
-                           "screenshots": e["screenshots"], "recordings": e["recordings"], "spoiler": e["spoiler"],
+                           "tables": e["tables"], "screenshots": e["screenshots"], "recordings": e["recordings"], "spoiler": e["spoiler"],
                            "spoilerLabel": e["spoiler_label"]}
                 fields = clean_fields({**current, **data})  # partial updates keep everything else
                 if not is_admin(viewer) and blocked_word(fields["title"], fields["body"]):
                     return self.err(400, f"Your post has a blocked word in it (“{blocked_word(fields['title'], fields['body'])}”).")
                 c = db.conn()
                 c.execute("INSERT INTO entry_versions VALUES (?,?,?,?)", (e["id"], now_ms(), e["updated_by"] or e["author"],
-                          json.dumps({k: e[k] for k in ("title", "body", "kind", "tags", "checklist", "screenshots", "recordings",
-                                                         "spoiler", "spoiler_label", "updated_at")})))
+                          json.dumps({k: e[k] for k in ("title", "body", "kind", "tags", "checklist", "tables", "screenshots",
+                                                         "recordings", "spoiler", "spoiler_label", "updated_at")})))
                 sets = dict(fields)
                 if viewer == e["author"] or is_admin(viewer):  # only the poster changes who can edit/copy
                     if data.get("editPolicy") in POLICIES:
@@ -1190,7 +1212,7 @@ class Handler(BaseHTTPRequestHandler):
                         sets["editors"] = json.dumps([s for s in data["editors"] if re.fullmatch(r"\d{17}", str(s))][:50])
                     if "allowCopy" in data:
                         sets["allow_copy"] = 1 if data["allowCopy"] else 0
-                for k in ("tags", "checklist", "screenshots", "recordings"):
+                for k in ("tags", "checklist", "tables", "screenshots", "recordings"):
                     sets[k] = json.dumps(sets[k])
                 sets.update({"updated_at": now_ms(), "updated_by": viewer})
                 c.execute(f"UPDATE entries SET {', '.join(f'{k}=?' for k in sets)} WHERE id=?", list(sets.values()) + [e["id"]])

@@ -57,9 +57,10 @@ MIGRATIONS = [
     ("entries", "featured_at", "INTEGER"),
     ("entries", "copies", "INTEGER DEFAULT 0"),      # times saved to someone's notes
     ("likes", "created_at", "INTEGER"),              # for 🔥 Trending (older likes have none)
+    ("entries", "tables", "TEXT DEFAULT '[]'"),      # the note's tables [{id, title, columns, rows, showInView}]
 ]
 
-JSON_COLS = ("tags", "checklist", "screenshots", "recordings", "editors")
+JSON_COLS = ("tags", "checklist", "tables", "screenshots", "recordings", "editors")
 
 
 def conn() -> sqlite3.Connection:

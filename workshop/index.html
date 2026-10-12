@@ -39,6 +39,10 @@
   .spoiler-gate { text-align: center; padding: 30px; background: #1a1622; border-radius: 10px; margin: 12px 0; }
   .comment { border-top: 1px solid var(--line); padding: 10px 0; } .comment p { margin: 4px 0 0; white-space: pre-wrap; }
   .row { display: flex; gap: 10px; } .row > * { flex: 1; }
+  .notetable { width: 100%; border-collapse: collapse; margin: 6px 0 10px; font-size: 14px; } .tablewrap { overflow-x: auto; }
+  .notetable th, .notetable td { border: 1px solid var(--line); padding: 5px 8px; text-align: left; vertical-align: top; overflow-wrap: anywhere; white-space: pre-wrap; }
+  .notetable th { background: var(--panel); } .notetable tr:nth-child(even) td { background: rgba(255,255,255,.03); }
+  details.vtable { margin: 6px 0; } details.vtable summary { cursor: pointer; padding: 6px 0; } .tname { font-weight: 600; margin: 10px 0 2px; }
   .check { display: flex; gap: 8px; align-items: center; padding: 3px 0; } .check input[type=text] { flex: 1; }
   .shot { width: 160px; font-size: 11px; } .shot img { width: 160px; height: 90px; object-fit: cover; border-radius: 6px; display: block; }
   .code-input { font-size: 28px; letter-spacing: 4px; text-align: center; text-transform: uppercase; width: 100%; padding: 12px; }
@@ -105,6 +109,12 @@
 window.DeskApp = window.DeskApp || window.SessionNotesApp; // the Android app's bridge (SessionNotesApp in apps before the rename)
 
 const $ = (s, el = document) => el.querySelector(s);
+/** A post's tables: "Show when reading" ones are open, the rest fold away. */
+const tableGrid = (t) => `<div class="tablewrap"><table class="notetable">${t.columns.some((c) => c.trim()) ? `<thead><tr>${t.columns.map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead>` : ""}
+  <tbody>${t.rows.map((r) => `<tr>${t.columns.map((_, i) => `<td>${esc(r[i] || "")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+const tablesHtml = (tables) => (tables || []).map((t) => t.showInView
+  ? `${t.title.trim() ? `<div class="tname">${esc(t.title)}</div>` : ""}${tableGrid(t)}`
+  : `<details class="vtable"><summary>▦ ${esc(t.title.trim() || "Table")} <span class="meta">${t.rows.length} × ${t.columns.length}</span></summary>${tableGrid(t)}</details>`).join("");
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const date = (ms) => (ms ? new Date(ms).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "—");
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => { const r = (Math.random() * 16) | 0; return (c === "x" ? r : (r & 3) | 8).toString(16); }));
@@ -365,7 +375,7 @@ async function renderGame() {
   if (view.has.length) params.set("has", view.has.join(","));
   const [entries, packs] = await Promise.all([
     view.sort === "trending" ? api(`/api/trending?appId=${encodeURIComponent(view.appId)}&limit=50`).then((list) => list.filter((e) => (!view.kinds.length || view.kinds.includes(e.kind))
-      && (!view.has.includes("screenshots") || e.hasScreenshots) && (!view.has.includes("voice") || e.hasVoice) && (!view.has.includes("checklist") || e.hasChecklist)))
+      && (!view.has.includes("screenshots") || e.hasScreenshots) && (!view.has.includes("voice") || e.hasVoice) && (!view.has.includes("checklist") || e.hasChecklist) && (!view.has.includes("tables") || e.hasTables)))
       : api(`/api/entries?${params}`),
     api(`/api/packs?appId=${encodeURIComponent(view.appId)}`).catch(() => [])]);
   if (!view.gameName && entries[0]) view.gameName = entries[0].gameName;
@@ -374,7 +384,7 @@ async function renderGame() {
       <span style="flex:1"></span>${canPost() ? '<button class="primary" id="newEntry">+ Post for this game</button>' : me ? "" : `<a class="steam-btn" href="${signIn()}">Sign in to post</a>`}</div>
     <div class="toolbar">${KINDS.map((k) => `<button data-kind="${k[0]}" class="${view.kinds.includes(k[0]) ? "on" : ""}">${k[1]} ${k[2]}</button>`).join("")}</div>
     <div class="toolbar"><span class="meta">Contains:</span>
-      ${[["screenshots", "📷 Screenshots"], ["voice", "🎙 Voice recording"], ["checklist", "☑ Checklist"]].map(([h, l]) => `<button data-has="${h}" class="${view.has.includes(h) ? "on" : ""}">${l}</button>`).join("")}
+      ${[["screenshots", "📷 Screenshots"], ["voice", "🎙 Voice recording"], ["checklist", "☑ Checklist"], ["tables", "▦ Tables"]].map(([h, l]) => `<button data-has="${h}" class="${view.has.includes(h) ? "on" : ""}">${l}</button>`).join("")}
       <span style="flex:1"></span><input id="q" placeholder="Search posts…" value="${esc(view.q)}">
       <select id="sort"><option value="top">Most liked</option><option value="trending">🔥 Trending</option><option value="copies">📥 Most saved</option><option value="new">Newest</option><option value="updated">Recently updated</option></select></div>
     ${packs.length ? `<h3>📦 Note Packs</h3>${packs.map(packCard).join("")}<h3>📚 Books</h3>` : ""}
@@ -396,7 +406,7 @@ function card(e) {
     <div class="first ${e.spoiler ? "blur" : ""}">${e.spoiler ? "Spoiler" + (e.spoilerLabel ? ": " + esc(e.spoilerLabel) : "") : esc(e.firstLine) || "&nbsp;"}</div>
     <span class="chip">${k[2]}</span>${view.appId ? "" : `<span class="chip">🎮 ${esc(e.gameName)}</span>`}<span class="chip">${who(e.author)}</span>
     ${e.featured ? '<span class="chip">⭐ Featured</span>' : ""}<span class="chip">♥ ${e.likes}</span><span class="chip">💬 ${e.comments}</span>${e.copies ? `<span class="chip">📥 ${e.copies}</span>` : ""}
-    ${e.hasScreenshots ? '<span class="chip">📷</span>' : ""}${e.hasVoice ? '<span class="chip">🎙</span>' : ""}${e.hasChecklist ? '<span class="chip">☑</span>' : ""}
+    ${e.hasScreenshots ? '<span class="chip">📷</span>' : ""}${e.hasVoice ? '<span class="chip">🎙</span>' : ""}${e.hasChecklist ? '<span class="chip">☑</span>' : ""}${e.hasTables ? '<span class="chip">▦</span>' : ""}
     ${e.spoiler ? `<span class="chip">🙈 ${esc(e.spoilerLabel || "Spoiler")}</span>` : ""}${e.tags.map((t) => `<span class="chip">#${esc(t)}</span>`).join("")}</div>
     ${e.thumb ? `<img class="thumb ${e.spoiler ? "blur" : ""}" loading="lazy" src="${media(e.thumb)}">` : ""}</div>`;
 }
@@ -427,6 +437,7 @@ async function openEntry(id, revealed = false, prefetched = null) {
       <button data-mod="${e.pinned ? "unpin" : "pin"}">${e.pinned ? "Unpin" : "📌 Pin"}</button><button data-mod="${e.featured ? "unfeature" : "feature"}">${e.featured ? "Unfeature" : "⭐ Feature"}</button><button data-mod="${e.locked ? "unlock" : "lock"}">${e.locked ? "🔓 Unlock" : "🔒 Lock"}</button></div>` : ""}
     ${hidden ? `<div class="spoiler-gate"><p>🙈 Spoiler${e.spoilerLabel ? `: <b>${esc(e.spoilerLabel)}</b>` : ""}</p><button class="primary" id="reveal">Reveal</button></div>` : `
       <div class="body">${body || '<span class="meta">(no text)</span>'}</div>
+      ${tablesHtml(e.tables)}
       ${e.checklist.length ? `<div>${e.checklist.map((c) => `<div>☐ ${esc(c.text)}</div>`).join("")}</div>` : ""}
       ${e.recordings.map((r) => `<audio controls preload="none" src="${media(r.file)}"></audio>`).join(" ")}
       <div class="gallery">${e.screenshots.filter((_, i) => !inlined.has(i)).map((s) => `<img src="${media(s.thumb || s.file)}" data-full="${esc(s.file)}">`).join("")}</div>`}

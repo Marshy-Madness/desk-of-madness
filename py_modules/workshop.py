@@ -142,6 +142,7 @@ class Workshop:
         payload = {"appId": appid, "gameName": game.get("name") or appid, "title": note["title"], "body": note.get("body", ""),
                    "kind": options.get("kind") or note.get("kind") or "note", "tags": note.get("tags", []),
                    "checklist": [{"id": c["id"], "text": c["text"]} for c in note.get("checklist") or []],
+                   "tables": note.get("tables") or [],
                    "screenshots": shots, "recordings": recs, "spoiler": bool(options.get("spoiler")),
                    "spoilerLabel": options.get("spoilerLabel", ""), "editPolicy": options.get("editPolicy", "owner"),
                    "editors": options.get("editors", []), "allowCopy": bool(options.get("allowCopy", True))}
@@ -191,6 +192,8 @@ class Workshop:
                 "source": {"type": "bookstore", "id": e["id"], "author": e["author"]["name"]}}
         if not note["checklist"]:
             note.pop("checklist")
+        if e.get("tables"):
+            note["tables"] = [{**t, "id": str(uuid.uuid4())} for t in e["tables"]]
         saved = storage.save_note(appid, note)
         self.copied("entries", e["id"])
         return saved

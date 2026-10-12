@@ -442,6 +442,8 @@ def import_from_bookstore(store: "Store", entry_id: str, source: str, user_id: s
             "source": {"type": "bookstore", "id": e["id"], "author": e["author"]["name"]}}
     if e.get("checklist"):
         note["checklist"] = [{"id": str(uuid.uuid4()), "text": c["text"], "done": False} for c in e["checklist"]]
+    if e.get("tables"):
+        note["tables"] = [{**t, "id": str(uuid.uuid4())} for t in e["tables"]]
     name = (stored or {}).get("name") or e.get("gameName") or appid
     store.sync(appid, {"appId": appid, "name": name, "notes": [note]}, source)
     if user_id:

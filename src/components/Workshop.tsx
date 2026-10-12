@@ -125,7 +125,7 @@ export const EntryModal: FC<{ id: string; appId: string; closeModal?: () => void
   const note: Note = {
     id: entry.id, folderId: null, title: entry.title, body: entry.body, tags: entry.tags, screenshots: entry.screenshots,
     recordings: entry.recordings, pinned: false, createdAt: entry.createdAt, updatedAt: entry.updatedAt, launchNumber: null,
-    checklist: entry.checklist, spoiler: entry.spoiler, kind: entry.kind,
+    checklist: entry.checklist, tables: entry.tables, spoiler: entry.spoiler, kind: entry.kind,
   };
 
   return (
@@ -309,7 +309,7 @@ export const PublishModal: FC<{ appId: string; note: Note; closeModal?: () => vo
     <ModalRoot className="dom-modal" onCancel={closeModal} bAllowFullSize>
       <h2 style={{ marginTop: 0 }}>{note.bookstoreId ? "Update published version" : "Publish to the Madness Workshop"}</h2>
       <div style={{ fontSize: "13px", opacity: 0.75 }}>
-        "{note.title}" with its screenshots, voice notes and checklist goes public as {settings.bookstoreUser.name}.
+        "{note.title}" with its screenshots, voice notes, checklist and tables goes public as {settings.bookstoreUser.name}.
       </div>
       <Dropdown rgOptions={KINDS.map((k) => ({ label: `${k.icon} ${k.label}`, data: k.kind }))} selectedOption={kind} onChange={(o) => setKind(o.data)} />
       <ToggleField label="Spoiler" description="Hidden until people choose to reveal it" checked={spoiler} onChange={setSpoiler} />
@@ -372,6 +372,7 @@ const EntryRow: FC<{ entry: WorkshopSummary; appId: string; showGame?: boolean }
           {e.hasScreenshots && <span style={s.chip}>📷</span>}
           {e.hasVoice && <span style={s.chip}>🎙</span>}
           {e.hasChecklist && <span style={s.chip}>☑</span>}
+          {e.hasTables && <span style={s.chip}>▦</span>}
           {e.spoiler && <span style={s.chip}>🙈 {e.spoilerLabel || "Spoiler"}</span>}
         </div>
       </div>
@@ -514,6 +515,7 @@ const CONTAINS = [
   { key: "screenshots", label: "📷 Screenshots" },
   { key: "voice", label: "🎙 Voice" },
   { key: "checklist", label: "☑ Checklist" },
+  { key: "tables", label: "▦ Tables" },
 ];
 
 let lastGame: { appId: string; name: string } | null = null;

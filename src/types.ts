@@ -457,6 +457,7 @@ export interface WorkshopSummary {
   hasScreenshots: boolean;
   hasVoice: boolean;
   hasChecklist: boolean;
+  hasTables?: boolean;
   thumb: string | null;
   createdAt: number;
   updatedAt: number;
@@ -486,6 +487,8 @@ export interface WorkshopPack {
 export interface WorkshopEntry extends WorkshopSummary {
   body: string;
   checklist: ChecklistItem[];
+  /** Missing on Workshops from before tables were stored. */
+  tables?: NoteTable[];
   screenshots: Screenshot[];
   recordings: Recording[];
   editPolicy: EditPolicy;
