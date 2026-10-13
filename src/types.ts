@@ -177,7 +177,7 @@ export type OpenChord = "l4r4" | "l5r5" | "l3r3" | "off";
  * What a button combo does: the radial menu, Desk Commands (the command palette), open the notes page ("open"), the Desk, the web browser, speech
  * to text or a voice command. "tomes" is the old name of the radial combo, still read as its fallback.
  */
-export type ComboAction = "radial" | "commands" | "open" | "desk" | "web" | "achievements" | "dictate" | "voice";
+export type ComboAction = "radial" | "commands" | "open" | "quicknote" | "desk" | "web" | "achievements" | "dictate" | "voice";
 
 /** One slot on the radial menu. */
 export type RadialItem =
@@ -190,6 +190,8 @@ export type RadialItem =
   | { type: "commands" }
   /** The full achievements page. */
   | { type: "achievements" }
+  /** A new note for the current game, in a pop-up over the game. */
+  | { type: "quicknote" }
   /** A note pinned to the wheel (separate from pinning in the notes list). */
   | { type: "note"; appId: string; noteId: string; title: string; gameName?: string };
 
@@ -197,6 +199,8 @@ export interface RadialSettings {
   /** The wheel's slots, clockwise from the top; unset = the default four. */
   items?: RadialItem[];
 }
+export type NotesIn = "popup" | "page";
+export type BringForward = "menu" | "qam";
 /** What a voice command does with words that don't start with a command. */
 export type VoiceFallback = "note" | "append" | "nothing";
 /** Where STEAM + L5 + R5 dictation goes: typed into whatever is focused, or saved as a note. */
@@ -235,6 +239,10 @@ export interface Settings {
   combos?: Partial<Record<ComboAction | "tomes", string[]>>;
   /** The radial menu's slots. */
   radial?: RadialSettings;
+  /** Notes from the wheel and the Notes combo: a pop-up over the game (quick) or the full notes page. Unset = popup. */
+  notesIn?: NotesIn;
+  /** In a game, how Steam's UI is brought in front before our pages show. Unset = the Steam menu. */
+  bringForward?: BringForward;
   /** Add "Desk of Madness" to the main Steam-button menu. */
   mainMenuEntry?: boolean;
   /** Give Desk of Madness its own Quick Access tab, next to Decky's. */

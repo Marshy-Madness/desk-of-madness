@@ -1,25 +1,28 @@
 import { FC, ReactNode, useEffect, useRef, useState } from "react";
 import { Focusable, GamepadButton, GamepadEvent } from "@decky/ui";
 import { addEventListener, removeEventListener } from "@decky/api";
-import { FaArrowLeft, FaBolt, FaTrophy, FaBookOpen, FaGamepad, FaGlobe, FaListUl, FaStickyNote, FaThumbtack } from "react-icons/fa";
+import { FaArrowLeft, FaBolt, FaTrophy, FaBookOpen, FaGamepad, FaGlobe, FaListUl, FaPen, FaStickyNote, FaThumbtack } from "react-icons/fa";
 import { backend } from "../api/backend";
 import { closeNotesPage, setNotesPageMounted } from "../opening";
 import { getRunningGame, useRunningGame } from "../hooks/useAppLifetime";
 import { useSettings } from "../state/notesStore";
 import { deskGame } from "../state/deskGame";
-import { recentlyOpened } from "../noteActions";
 import { kindInfo } from "../utils/kinds";
 import { ensureTheme } from "../theme";
 import { useChromeHeights } from "../steamWindow";
 import { Game, GameSummary, RadialItem } from "../types";
 import { itemLabel, radialItems } from "./items";
-import { goAchievements, goCommands, goDesk, goNote, goNotes, goWeb, takeRadialBackdrop, takeRadialCombo } from "./go";
+import { goAchievements, goCommands, goDesk, goNotes, goWeb, notesFromWheel, openNoteFromWheel, quickNote } from "./go";
+import { setPopupRunner, takeRadialBackdrop, takeRadialCombo, takeRadialPopup } from "./go";
+import { noteOrder, Popup, runPopup } from "./popup";
+import { whenNoteWindowsClose } from "../state/resume";
 
 // The radial menu: its own page, opened by the radial combo. Aim with the right stick (read from the
 // controller by the backend) or the D-pad, then A (or let go of the combo). The current game's slot opens a
 // second wheel of that game's notes. Which slots there are is set in Settings → Controls.
 // Steam's pages hide the game, so in a game the background is a gamescope screenshot of it, taken as the
-// combo goes down: the wheel looks like it sits right on the game.
+// combo goes down: the wheel looks like it sits right on the game. Pop-ups (a note window over the game, see
+// popup.tsx) are shown here too, with the wheel hidden.
 
 const SIZE = 460;
 const RADIUS = 172;
@@ -43,18 +46,6 @@ const host = (url: string) => {
   }
 };
 
-/** A game's notes for its wheel: pinned first, then the ones opened lately, then the latest edited. */
-function noteOrder(game: Game) {
-  const recent = recentlyOpened(game.appId);
-  const rank = (id: string) => {
-    const i = recent.indexOf(id);
-    return i < 0 ? recent.length : i;
-  };
-  return [...game.notes].sort(
-    (a, b) => Number(b.pinned) - Number(a.pinned) || rank(a.id) - rank(b.id) || b.updatedAt - a.updatedAt
-  );
-}
-
 export const RadialPage: FC = () => {
   const settings = useSettings();
   const running = useRunningGame();
@@ -64,7 +55,15 @@ export const RadialPage: FC = () => {
   const [game, setGame] = useState<Game | null>(null);
   const [sel, setSel] = useState<number | null>(null);
   const [backdrop, setBackdrop] = useState<string | null>(null);
+  const [popup, setPopup] = useState(false);
+  const popupUp = useRef(false);
   const aimed = useRef(false);
+
+  const showPopup = (p: Popup) => {
+    popupUp.current = true;
+    setPopup(true);
+    runPopup(p, (appId) => goNotes(appId));
+  };
 
   useEffect(() => {
     ensureTheme();
@@ -73,8 +72,13 @@ export const RadialPage: FC = () => {
     let live = true;
     const shot = takeRadialBackdrop() ?? (getRunningGame() ? backend.captureBackdrop().catch(() => null) : null);
     shot?.then((url) => live && setBackdrop(url));
+    setPopupRunner(showPopup);
+    const first = takeRadialPopup();
+    if (first) showPopup(first);
     return () => {
       live = false;
+      setPopupRunner(null);
+      whenNoteWindowsClose(null);
       setNotesPageMounted(false);
       if (shot) backend.discardBackdrop().catch(() => {});
     };
@@ -100,7 +104,10 @@ export const RadialPage: FC = () => {
         if (!gameId) return null;
         return { key, icon: <FaGamepad />, label: gameName(gameId) ?? "This game", sub: "Its notes", run: openGameRing };
       case "notes":
-        return { key, icon: <FaStickyNote />, label: "Notes", run: () => goNotes(gameId) };
+        return { key, icon: <FaStickyNote />, label: "Notes", run: () => notesFromWheel(gameId) };
+      case "quicknote":
+        if (!gameId) return null;
+        return { key, icon: <FaPen />, label: "Quick note", sub: gameName(gameId), run: () => quickNote(gameId) };
       case "desk":
         return { key, icon: <FaBookOpen />, label: "Desk", run: () => goDesk(gameId) };
       case "web":
@@ -115,7 +122,7 @@ export const RadialPage: FC = () => {
           icon: <FaThumbtack />,
           label: itemLabel(item),
           sub: gameName(item.appId) ?? item.gameName,
-          run: () => goNote(item.appId, item.noteId),
+          run: () => openNoteFromWheel(item.appId, item.noteId),
         };
     }
   };
@@ -129,7 +136,7 @@ export const RadialPage: FC = () => {
             key: n.id,
             icon: n.pinned ? <FaThumbtack /> : <span>{kindInfo(n.kind).icon}</span>,
             label: n.title || "Untitled",
-            run: () => goNote(game!.appId, n.id),
+            run: () => openNoteFromWheel(game!.appId, n.id),
           })),
         ];
 
@@ -156,7 +163,7 @@ export const RadialPage: FC = () => {
       const n = state.current.slots.length;
       const fx = x / 32767;
       const fy = y / 32767;
-      if (!n || Math.hypot(fx, fy) < DEADZONE) return;
+      if (!n || popupUp.current || Math.hypot(fx, fy) < DEADZONE) return;
       let angle = Math.atan2(fx, fy); // 0 = up, clockwise
       if (angle < 0) angle += Math.PI * 2;
       aimed.current = true;
@@ -164,7 +171,7 @@ export const RadialPage: FC = () => {
     };
     const held = new Set(takeRadialCombo());
     const onButtons = (names: string[]) => {
-      if (!held.size || [...held].some((b) => names.includes(b))) return;
+      if (!held.size || popupUp.current || [...held].some((b) => names.includes(b))) return;
       held.clear();
       if (aimed.current && state.current.sel != null) pick(state.current.sel);
     };
@@ -236,7 +243,7 @@ export const RadialPage: FC = () => {
         onCancelButton={back}
         onCancelActionDescription={ring === "game" ? "Back" : "Close"}
         actionDescriptionMap={{ [GamepadButton.BUMPER_LEFT]: "Previous", [GamepadButton.BUMPER_RIGHT]: "Next" }}
-        style={{ display: "flex", flexDirection: "column", alignItems: "center" }}
+        style={{ display: popup ? "none" : "flex", flexDirection: "column", alignItems: "center" }}
       >
         <div style={{ fontSize: "18px", fontWeight: "bold", marginBottom: "4px", display: "flex", alignItems: "center", gap: "10px" }}>
           {ring === "game" && (

@@ -81,8 +81,12 @@ export function steamUiInFront(): boolean | null {
   return typeof focused === "number" ? focused === STEAM_UI_APPID : null;
 }
 
-/** Whether Steam's main (Steam button) menu is open. */
-export function mainMenuOpen(): boolean | null {
+// Steam's side menus, as MenuStore.GetOpenSideMenu reports them.
+export const SIDE_MENU_MAIN = 1;
+export const SIDE_MENU_QAM = 2;
+
+/** Whether that side menu (the Steam-button menu unless said) is open; null if we can't tell. */
+export function mainMenuOpen(which: number = SIDE_MENU_MAIN): boolean | null {
   const store = mainWindow()?.MenuStore;
-  return typeof store?.GetOpenSideMenu === "function" ? store.GetOpenSideMenu() === 1 : null;
+  return typeof store?.GetOpenSideMenu === "function" ? store.GetOpenSideMenu() === which : null;
 }

@@ -34,6 +34,7 @@ export interface OpenNote {
 let open: OpenNote | null = null;
 let modal: { Close(): void } | null = null;
 let hiding = false;
+let onAllClosed: (() => void) | null = null;
 const folders = new Map<string, string | null>();
 
 export const lastFolder = (appId: string) => folders.get(appId) ?? null;
@@ -71,11 +72,19 @@ const Tracked: FC<{ note: OpenNote; element: ReactElement; closeModal?: () => vo
       if (!hiding) {
         open = null;
         setPlace({ note: null });
+        const cb = onAllClosed;
+        // A moment later, so a window that opens straight after (viewer → editor) still counts as open.
+        if (cb) setTimeout(() => !modal && onAllClosed === cb && ((onAllClosed = null), cb()), 150);
       }
     };
   }, []);
   return cloneElement(element, { closeModal } as any);
 };
+
+/** Calls `cb` once the note windows are all closed by you (not put away). null forgets it. For the pop-ups. */
+export function whenNoteWindowsClose(cb: (() => void) | null) {
+  onAllClosed = cb;
+}
 
 /** Shows a note's viewer or editor, remembering it so it can come back. */
 export function showNoteModal(note: OpenNote, element: ReactElement) {

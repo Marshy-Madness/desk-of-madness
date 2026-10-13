@@ -20,6 +20,7 @@ const ACTION_NAMES: Record<ComboAction, string> = {
   radial: "Radial menu",
   commands: "Desk Commands",
   open: "Notes",
+  quicknote: "Quick note",
   desk: "Desk",
   web: "Web Browser",
   achievements: "Achievements",

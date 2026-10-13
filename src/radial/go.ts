@@ -4,6 +4,7 @@ import { getRunningGame } from "../hooks/useAppLifetime";
 import { deskGame, pointDeskAt } from "../state/deskGame";
 import { ACHIEVEMENTS_ROUTE, COMMANDS_ROUTE, lastPlaceAddress, NOTES_ROUTE, parsePlace, RADIAL_ROUTE, WEB_ROUTE } from "../state/place";
 import { webPath } from "../browser";
+import { Popup, popupsOn } from "./popup";
 
 // Where the radial menu's slots and the Notes / Desk / Web Browser button combos take you.
 
@@ -76,6 +77,7 @@ export function goWeb(url?: string) {
 /** Notes combo: back where you were if that was this game's notes, otherwise this game's notes list. */
 export function notesCombo() {
   if (isNotesPageShowing()) return closeNotesPage();
+  if (popupsOn() && currentGameId()) return notesFromWheel();
   const last = lastPlaceAddress();
   const p = last ? parsePlace(last) : null;
   const running = getRunningGame()?.appId;
@@ -93,14 +95,60 @@ export const commandsCombo = () => (isNotesPageShowing() ? closeNotesPage() : go
 
 let radialCombo: { buttons: string[]; at: number } | null = null;
 let radialBackdrop: { shot: Promise<string | null>; at: number } | null = null;
+let radialPopup: { popup: Popup; at: number } | null = null;
+
+/** The radial page, with a picture of the game grabbed now (it's still on screen) for it to sit over. */
+function openRadialPage() {
+  radialBackdrop = getRunningGame() ? { shot: backend.captureBackdrop().catch(() => null), at: Date.now() } : null;
+  showPage(RADIAL_ROUTE);
+}
 
 /** Opens the radial menu (or closes our pages if one is showing). `buttons`: letting go of them picks. */
 export function radialComboPressed(buttons: string[]) {
   if (isNotesPageShowing()) return closeNotesPage();
   radialCombo = { buttons, at: Date.now() };
-  // The game is still on screen as the combo goes down: grab it now, so the menu can sit over it.
-  radialBackdrop = getRunningGame() ? { shot: backend.captureBackdrop().catch(() => null), at: Date.now() } : null;
-  showPage(RADIAL_ROUTE);
+  openRadialPage();
+}
+
+// The radial page, while it's showing, runs pop-ups itself.
+let popupRunner: ((p: Popup) => void) | null = null;
+export const setPopupRunner = (run: ((p: Popup) => void) | null) => (popupRunner = run);
+
+/** A note, a new note or a game's notes list in a pop-up over the game (on the radial page, wheel hidden). */
+export function showPopup(p: Popup) {
+  if (popupRunner) return popupRunner(p);
+  radialPopup = { popup: p, at: Date.now() };
+  openRadialPage();
+}
+
+/** The pop-up to show, taken once by the radial page as it mounts. */
+export function takeRadialPopup(): Popup | null {
+  const r = radialPopup;
+  radialPopup = null;
+  return r && Date.now() - r.at < 3000 ? r.popup : null;
+}
+
+/** Quick note combo and wheel slot: a new note for the current game, in a pop-up. */
+export function quickNote(appId: string | null = currentGameId()) {
+  if (!appId) return goNotes(null);
+  pointDeskAt(appId);
+  showPopup({ kind: "new", appId });
+}
+
+export const quickNoteCombo = () => (isNotesPageShowing() ? closeNotesPage() : quickNote());
+
+/** A note from the wheel: a pop-up, or in its notes list on the full page (Settings → Controls). */
+export function openNoteFromWheel(appId: string, noteId: string) {
+  if (!popupsOn()) return goNote(appId, noteId);
+  pointDeskAt(appId);
+  showPopup({ kind: "note", appId, noteId });
+}
+
+/** The game's notes: a pop-up list, or the full notes page. */
+export function notesFromWheel(appId: string | null = currentGameId()) {
+  if (!popupsOn() || !appId) return goNotes(appId);
+  pointDeskAt(appId);
+  showPopup({ kind: "list", appId });
 }
 
 /** The combo that opened the menu, taken once by the page as it mounts (stale ones are dropped). */

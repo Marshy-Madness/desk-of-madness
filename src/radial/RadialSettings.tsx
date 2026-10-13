@@ -1,13 +1,13 @@
 import { FC } from "react";
 import { DialogButton, Field, Focusable } from "@decky/ui";
-import { FaArrowDown, FaArrowUp, FaBolt, FaTrophy, FaBookOpen, FaGamepad, FaGlobe, FaStickyNote, FaThumbtack, FaTimes } from "react-icons/fa";
+import { FaArrowDown, FaArrowUp, FaBolt, FaPen, FaTrophy, FaBookOpen, FaGamepad, FaGlobe, FaStickyNote, FaThumbtack, FaTimes } from "react-icons/fa";
 import { useSettings } from "../state/notesStore";
 import { RadialItem } from "../types";
 import { addItem, BUILT_IN, itemDescription, itemLabel, MAX_ITEMS, moveItem, radialItems, removeItem, resetItems, sameItem } from "./items";
 import * as s from "../components/styles";
 
 export const itemIcon = (item: RadialItem) =>
-  ({ game: <FaGamepad />, notes: <FaStickyNote />, desk: <FaBookOpen />, web: <FaGlobe />, commands: <FaBolt />, achievements: <FaTrophy />, note: <FaThumbtack /> })[item.type];
+  ({ game: <FaGamepad />, notes: <FaStickyNote />, desk: <FaBookOpen />, web: <FaGlobe />, quicknote: <FaPen />, commands: <FaBolt />, achievements: <FaTrophy />, note: <FaThumbtack /> })[item.type];
 
 const small = { ...s.iconButton, width: "36px", minWidth: "36px", height: "34px", fontSize: "14px" };
 

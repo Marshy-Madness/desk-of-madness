@@ -2,7 +2,7 @@ import { FC, useEffect, useState } from "react";
 import { ButtonItem, DialogButton, DropdownItem, Focusable, PanelSectionRow, TextField, ToggleField } from "@decky/ui";
 import { backend } from "../api/backend";
 import { emitDataChanged, loadSettings, updateSettings, useSettings } from "../state/notesStore";
-import { BackupStatus, BrowserMode, DictateTarget, ReaderCacheSettings, VoiceFallback } from "../types";
+import { BackupStatus, BringForward, BrowserMode, DictateTarget, NotesIn, ReaderCacheSettings, VoiceFallback } from "../types";
 import { ComboRow, VoiceCommandList } from "./ComboSettings";
 import { refreshSpeech, useSpeechAllowed } from "../state/speech";
 import { LinkPanel } from "./Workshop";
@@ -19,6 +19,16 @@ import * as s from "./styles";
 const DICTATE_TARGETS: { label: string; data: DictateTarget }[] = [
   { label: "Type it where I am", data: "type" },
   { label: "Save it as a note for this game", data: "note" },
+];
+
+const NOTES_IN: { label: string; data: NotesIn }[] = [
+  { label: "Pop-up over the game (quick)", data: "popup" },
+  { label: "Full notes page", data: "page" },
+];
+
+const BRING_FORWARD: { label: string; data: BringForward }[] = [
+  { label: "Steam menu", data: "menu" },
+  { label: "Quick Access menu", data: "qam" },
 ];
 
 const VOICE_FALLBACKS: { label: string; data: VoiceFallback }[] = [
@@ -422,12 +432,39 @@ export const SettingsView: FC = () => {
             <RadialItemsEditor />
           </PanelSectionRow>
 
+          <PanelSectionRow>
+            <DropdownItem
+              label="Open notes as"
+              description="For notes picked on the wheel, the Notes slot and the Notes combo. A pop-up is a note window right over the game, without loading the full notes page; closing it goes straight back to the game."
+              rgOptions={NOTES_IN}
+              selectedOption={settings.notesIn ?? "popup"}
+              onChange={(o) => updateSettings({ notesIn: o.data })}
+            />
+          </PanelSectionRow>
+          <PanelSectionRow>
+            <DropdownItem
+              label="In a game, bring Steam forward with"
+              description="Steam only shows our pages once its UI is in front of the game, so one of its menus is opened for a moment first. Try both and keep whichever feels quicker."
+              rgOptions={BRING_FORWARD}
+              selectedOption={settings.bringForward ?? "menu"}
+              onChange={(o) => updateSettings({ bringForward: o.data })}
+            />
+          </PanelSectionRow>
+
           <Heading>Straight to a page</Heading>
           <PanelSectionRow>
             <ComboRow
               action="open"
               label="Notes"
-              description="The notes for the game you're playing, back where you were. Press it again to put the page away."
+              description="The notes for the game you're playing: a pop-up list, or the full page back where you were (see Open notes as). Press it again to put it away."
+              canTurnOff
+            />
+          </PanelSectionRow>
+          <PanelSectionRow>
+            <ComboRow
+              action="quicknote"
+              label="Quick note"
+              description="A new note for the game you're playing, in a pop-up over the game. Save or close it and you're back in the game."
               canTurnOff
             />
           </PanelSectionRow>

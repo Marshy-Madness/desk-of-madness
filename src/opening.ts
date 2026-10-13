@@ -1,9 +1,10 @@
 import { useSyncExternalStore } from "react";
-import { Navigation } from "@decky/ui";
+import { Navigation, QuickAccessTab } from "@decky/ui";
 import { getRunningGame } from "./hooks/useAppLifetime";
 import { putAwayNote } from "./state/resume";
 import { lastPlaceAddress, NOTES_ROUTE, WEB_ROUTE } from "./state/place";
-import { mainMenuOpen, steamHistory, steamUiInFront } from "./steamWindow";
+import { getSettings } from "./state/notesStore";
+import { mainMenuOpen, SIDE_MENU_MAIN, SIDE_MENU_QAM, steamHistory, steamUiInFront } from "./steamWindow";
 
 // Opening the full-screen page, kept apart from integrations.tsx so the panels can use it without an import loop.
 
@@ -18,20 +19,24 @@ const FALLBACK_WAIT_MS = 200; // older Steam without the focus info: the fixed w
  * alone changes the page behind the game without showing it, so we open the Steam menu first (as picking an
  * entry from that menu does) and wait until gamescope reports that Steam's UI has the screen, checking every
  * frame, instead of guessing a delay. Outside a game, or when Steam's UI is already in front (from the Quick
- * Access menu), there's nothing to wait for.
+ * Access menu), there's nothing to wait for. Settings → Controls can use the Quick Access menu instead of the
+ * Steam menu (it slides in over the game rather than covering it, which may be quicker on some setups).
  */
 function withSteamInFront(then: () => void) {
   if (!getRunningGame() || pagesMounted > 0) return then(); // no game, or one of our pages is already up
 
   const alreadyInFront = steamUiInFront() === true;
-  Navigation.OpenMainMenu();
+  const qam = getSettings().bringForward === "qam";
+  if (qam) Navigation.OpenQuickAccessMenu(QuickAccessTab.Decky);
+  else Navigation.OpenMainMenu();
   if (alreadyInFront) return then();
+  const menu = qam ? SIDE_MENU_QAM : SIDE_MENU_MAIN;
   const started = Date.now();
   const check = () => {
     const front = steamUiInFront();
     const waited = Date.now() - started;
     if (front === null) return void setTimeout(then, Math.max(0, FALLBACK_WAIT_MS - waited));
-    if ((front && mainMenuOpen() !== false) || waited >= MAX_WAIT_MS) {
+    if ((front && mainMenuOpen(menu) !== false) || waited >= MAX_WAIT_MS) {
       console.info(`Desk of Madness: Steam UI in front after ${waited} ms${front ? "" : " (gave up waiting)"}`);
       return then();
     }

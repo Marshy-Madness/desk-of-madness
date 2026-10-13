@@ -5,7 +5,7 @@ import { RadialItem, Settings } from "../types";
 // The radial menu's slots: which ones it has and in what order (Settings → Controls), and notes pinned to it
 // from a note's window. Pinning a note here is separate from pinning it in the notes list.
 
-export const DEFAULT_ITEMS: RadialItem[] = [{ type: "game" }, { type: "notes" }, { type: "desk" }, { type: "web" }];
+export const DEFAULT_ITEMS: RadialItem[] = [{ type: "game" }, { type: "notes" }, { type: "quicknote" }, { type: "desk" }, { type: "web" }];
 export const MAX_ITEMS = 10;
 
 /** The built-in slots, for the "Add" buttons. */
@@ -26,6 +26,8 @@ export function itemLabel(item: RadialItem): string {
       return "Desk";
     case "web":
       return "Web Browser";
+    case "quicknote":
+      return "Quick note";
     case "commands":
       return "Commands";
     case "achievements":
@@ -38,7 +40,8 @@ export function itemLabel(item: RadialItem): string {
 export const itemDescription = (item: RadialItem): string =>
   ({
     game: "The game you're playing (or played last). Opens a wheel of its notes.",
-    notes: "The notes list for the game you're playing.",
+    notes: "The notes list for the game you're playing (a pop-up or the full page, see below).",
+    quicknote: "Write a new note for the game you're playing, in a pop-up over the game.",
     desk: "Your Desk of Tomes.",
     web: "The browser, back on the page you had open.",
     commands: "Desk Commands: search, new note, timers, dice, Home Assistant, Docker…",

@@ -1,5 +1,5 @@
 import { cloneElement, isValidElement } from "react";
-import { achievementsCombo, commandsCombo, deskCombo, notesCombo, radialComboPressed, webCombo } from "./radial/go";
+import { achievementsCombo, commandsCombo, deskCombo, notesCombo, quickNoteCombo, radialComboPressed, webCombo } from "./radial/go";
 import { RadialPage } from "./radial/RadialPage";
 import { addEventListener, removeEventListener, routerHook } from "@decky/api";
 import { afterPatch, ErrorBoundary, findModuleExport, Patch } from "@decky/ui";
@@ -100,7 +100,7 @@ function findInputService(): InputService | null {
   }
 }
 
-const ACTIONS: ComboAction[] = ["radial", "commands", "open", "desk", "web", "achievements", "dictate", "voice"];
+const ACTIONS: ComboAction[] = ["radial", "commands", "open", "quicknote", "desk", "web", "achievements", "dictate", "voice"];
 
 function enabledCombos(): { action: ComboAction; buttons: Button[] }[] {
   const s = getSettings();
@@ -108,6 +108,7 @@ function enabledCombos(): { action: ComboAction; buttons: Button[] }[] {
     radial: true,
     commands: true,
     open: true,
+    quicknote: true,
     desk: true,
     web: true,
     achievements: true,
@@ -122,6 +123,7 @@ function enabledCombos(): { action: ComboAction; buttons: Button[] }[] {
 
 function runCombo(action: ComboAction) {
   if (action === "open") notesCombo();
+  else if (action === "quicknote") quickNoteCombo();
   else if (action === "radial") radialComboPressed(getCombo("radial") ?? []);
   else if (action === "commands") commandsCombo();
   else if (action === "desk") deskCombo();

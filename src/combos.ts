@@ -50,6 +50,7 @@ export const DEFAULT_COMBOS: Record<ComboAction, Button[]> = {
   radial: ["R4", "R5"],
   commands: ["L5", "R5"],
   open: ["L4", "R4"],
+  quicknote: [],
   desk: [],
   web: [],
   achievements: [],
