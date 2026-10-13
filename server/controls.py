@@ -3,8 +3,8 @@
 Home Assistant: HA_URL + HA_TOKEN (a long-lived access token from your HA profile page). Lists the things
 you can switch or run (lights, switches, fans, scenes, scripts...) and calls their services.
 
-Docker: DOCKER_URL points at a docker-socket-proxy (never the raw socket), so the server can only list and
-start/stop/restart containers. Stdlib only, like the rest of the server.
+Docker: DOCKER_URL points at a socket proxy (never the raw socket) that only lets through listing and
+start/stop/restart. DOCKER_PROTECT names containers the palette can't see or touch at all. Stdlib only, like the rest of the server.
 """
 import json
 import os
@@ -17,6 +17,8 @@ HA_TOKEN = os.environ.get("HA_TOKEN", "").strip()
 DOCKER_URL = os.environ.get("DOCKER_URL", "").rstrip("/")
 # Containers the palette may not stop (this server, its proxy). Restarting them is still allowed.
 NO_STOP = {n.strip() for n in os.environ.get("DOCKER_NO_STOP", "desk-of-madness,desk-of-madness-docker").split(",") if n.strip()}
+# Containers hidden from the palette and refused outright (the proxy, the reverse proxy, password manager...).
+PROTECT = {n.strip() for n in os.environ.get("DOCKER_PROTECT", "desk-of-madness-docker").split(",") if n.strip()}
 
 HA_DOMAINS = ("light", "switch", "fan", "input_boolean", "scene", "script", "automation", "cover", "media_player")
 # Things that only run (no on/off state worth showing).
@@ -114,6 +116,8 @@ def docker_list() -> list:
     for c in _docker("GET", "/containers/json?all=1") or []:
         names = [n.lstrip("/") for n in c.get("Names") or []]
         labels = c.get("Labels") or {}
+        if any(n in PROTECT for n in names):
+            continue
         out.append({
             "name": names[0] if names else c.get("Id", "")[:12],
             "image": c.get("Image", ""),
@@ -130,6 +134,10 @@ def docker_action(name: str, action: str) -> dict:
         raise ControlError(400, "Bad container name")
     if action not in DOCKER_ACTIONS:
         raise ControlError(400, "Unknown action")
+    # Docker also accepts IDs and ID prefixes, so check the real name rather than what was sent.
+    name = ((_docker("GET", f"/containers/{name}/json") or {}).get("Name") or "").lstrip("/")
+    if not name or name in PROTECT:
+        raise ControlError(403, "That container can't be controlled from here")
     if action == "stop" and name in NO_STOP:
         raise ControlError(403, f"{name} runs Desk of Madness itself; restart it instead")
     _docker("POST", f"/containers/{name}/{action}")
