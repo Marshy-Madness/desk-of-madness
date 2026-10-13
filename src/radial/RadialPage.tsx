@@ -4,7 +4,7 @@ import { addEventListener, removeEventListener } from "@decky/api";
 import { FaArrowLeft, FaBolt, FaTrophy, FaBookOpen, FaGamepad, FaGlobe, FaListUl, FaStickyNote, FaThumbtack } from "react-icons/fa";
 import { backend } from "../api/backend";
 import { closeNotesPage, setNotesPageMounted } from "../opening";
-import { useRunningGame } from "../hooks/useAppLifetime";
+import { getRunningGame, useRunningGame } from "../hooks/useAppLifetime";
 import { useSettings } from "../state/notesStore";
 import { deskGame } from "../state/deskGame";
 import { recentlyOpened } from "../noteActions";
@@ -13,11 +13,13 @@ import { ensureTheme } from "../theme";
 import { useChromeHeights } from "../steamWindow";
 import { Game, GameSummary, RadialItem } from "../types";
 import { itemLabel, radialItems } from "./items";
-import { goAchievements, goCommands, goDesk, goNote, goNotes, goWeb, takeRadialCombo } from "./go";
+import { goAchievements, goCommands, goDesk, goNote, goNotes, goWeb, takeRadialBackdrop, takeRadialCombo } from "./go";
 
 // The radial menu: its own page, opened by the radial combo. Aim with the right stick (read from the
 // controller by the backend) or the D-pad, then A (or let go of the combo). The current game's slot opens a
 // second wheel of that game's notes. Which slots there are is set in Settings → Controls.
+// Steam's pages hide the game, so in a game the background is a gamescope screenshot of it, taken as the
+// combo goes down: the wheel looks like it sits right on the game.
 
 const SIZE = 460;
 const RADIUS = 172;
@@ -61,13 +63,21 @@ export const RadialPage: FC = () => {
   const [ring, setRing] = useState<"main" | "game">("main");
   const [game, setGame] = useState<Game | null>(null);
   const [sel, setSel] = useState<number | null>(null);
+  const [backdrop, setBackdrop] = useState<string | null>(null);
   const aimed = useRef(false);
 
   useEffect(() => {
     ensureTheme();
     setNotesPageMounted(true);
     backend.listGames().then(setGames, () => setGames([]));
-    return () => setNotesPageMounted(false);
+    let live = true;
+    const shot = takeRadialBackdrop() ?? (getRunningGame() ? backend.captureBackdrop().catch(() => null) : null);
+    shot?.then((url) => live && setBackdrop(url));
+    return () => {
+      live = false;
+      setNotesPageMounted(false);
+      if (shot) backend.discardBackdrop().catch(() => {});
+    };
   }, []);
 
   const lastPlayed = games && [...games].sort((a, b) => (b.lastLaunched ?? 0) - (a.lastLaunched ?? 0))[0];
@@ -203,7 +213,11 @@ export const RadialPage: FC = () => {
         inset: 0,
         paddingTop: `${header}px`,
         paddingBottom: `${footer}px`,
-        background: "radial-gradient(circle, rgba(14,20,27,0.88) 0%, rgba(14,20,27,0.96) 70%)",
+        // Dark only until the game's picture arrives (or when there's no game); then just the game.
+        background: backdrop
+          ? `center / cover no-repeat url("${backdrop}")`
+          : "radial-gradient(circle, rgba(14,20,27,0.88) 0%, rgba(14,20,27,0.96) 70%)",
+        textShadow: backdrop ? "0 1px 3px #000, 0 0 8px rgba(0,0,0,0.9)" : undefined,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",

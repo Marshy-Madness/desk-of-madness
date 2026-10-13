@@ -1,3 +1,4 @@
+import { backend } from "../api/backend";
 import { closeNotesPage, isNotesPageShowing, showPage } from "../opening";
 import { getRunningGame } from "../hooks/useAppLifetime";
 import { deskGame, pointDeskAt } from "../state/deskGame";
@@ -91,11 +92,14 @@ export const commandsCombo = () => (isNotesPageShowing() ? closeNotesPage() : go
 // ---- the radial menu ----
 
 let radialCombo: { buttons: string[]; at: number } | null = null;
+let radialBackdrop: { shot: Promise<string | null>; at: number } | null = null;
 
 /** Opens the radial menu (or closes our pages if one is showing). `buttons`: letting go of them picks. */
 export function radialComboPressed(buttons: string[]) {
   if (isNotesPageShowing()) return closeNotesPage();
   radialCombo = { buttons, at: Date.now() };
+  // The game is still on screen as the combo goes down: grab it now, so the menu can sit over it.
+  radialBackdrop = getRunningGame() ? { shot: backend.captureBackdrop().catch(() => null), at: Date.now() } : null;
   showPage(RADIAL_ROUTE);
 }
 
@@ -104,4 +108,11 @@ export function takeRadialCombo(): string[] {
   const r = radialCombo;
   radialCombo = null;
   return r && Date.now() - r.at < 3000 ? r.buttons : [];
+}
+
+/** The picture of the game taken as the combo went down, taken once by the page as it mounts. */
+export function takeRadialBackdrop(): Promise<string | null> | null {
+  const r = radialBackdrop;
+  radialBackdrop = null;
+  return r && Date.now() - r.at < 3000 ? r.shot : null;
 }
