@@ -265,6 +265,8 @@ export interface Settings {
   readerTextSize?: number;
   /** The Desk: which Tomes show, in what order, and Tome options. */
   desk?: DeskSettings;
+  /** Folders for Decky's plugins (the Plugin Folders Tome, and optionally Decky's own list). */
+  pluginFolders?: PluginFolderSettings;
   /** Session tracking options. */
   play?: PlaySettings;
   /** Installed Scrolls: on or off, and each Scroll's own settings. */
@@ -368,6 +370,22 @@ export interface DeskSettings {
 }
 
 export type TomeSize = "tile" | "card";
+
+/** A folder of Decky plugins, by plugin name. */
+export interface PluginFolder {
+  id: string;
+  name: string;
+  icon: string;
+  plugins: string[];
+}
+
+export interface PluginFolderSettings {
+  folders?: PluginFolder[];
+  /** The top level's order: "f:<folder id>" or "p:<plugin name>". Anything missing goes after, in Decky's order. */
+  order?: string[];
+  /** Show the folders in Decky's own plugin list (Quick Access) instead of its flat list. Off unless turned on. */
+  inDeckyList?: boolean;
+}
 
 /** A page of the Desk. The "game" page uses the per-game layouts; every other page has its own layout. */
 export interface DeskPage {

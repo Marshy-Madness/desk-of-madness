@@ -5,3 +5,4 @@ import "./workshop";
 import "./deck";
 import "./play";
 import "./trophies";
+import "./plugins";
