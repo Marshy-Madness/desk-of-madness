@@ -27,3 +27,22 @@ async function remove(appId: string, paths: string[]): Promise<number> {
   if (list.length) await SC.DeleteLocalScreenshots(list);
   return list.reduce((n, x) => n + x.rgHandles.length, 0);
 }
+
+// Steam's own "screenshot saved" popup is the client setting enable_screenshot_notification (field 4006 of
+// CMsgClientSettings). Steam's settings page writes it as a one-field message, so we do the same:
+// key (4006 << 3, as a varint) then the bool.
+const NOTIFY_FIELD_KEY = [0xb0, 0xfa, 0x01];
+
+/** Whether Steam shows its own popup when you take a screenshot (null if Steam doesn't say). */
+export function steamScreenshotPopupOn(): boolean | null {
+  const v = (window as any).settingsStore?.clientSettings?.enable_screenshot_notification;
+  return typeof v === "boolean" ? v : null;
+}
+
+/** Turns Steam's own screenshot popup on or off (the same switch as Settings → In Game in Steam). */
+export function setSteamScreenshotPopup(on: boolean): boolean {
+  const set = (window as any).SteamClient?.Settings?.SetSetting;
+  if (typeof set !== "function") return false;
+  set(btoa(String.fromCharCode(...NOTIFY_FIELD_KEY, on ? 1 : 0)));
+  return true;
+}

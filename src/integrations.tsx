@@ -1,8 +1,8 @@
 import { cloneElement, isValidElement } from "react";
-import { achievementsCombo, commandsCombo, deskCombo, notesCombo, quickNoteCombo, radialComboPressed, webCombo } from "./radial/go";
+import { achievementsCombo, commandsCombo, deskCombo, goNotes, notesCombo, quickNoteCombo, radialComboPressed, webCombo } from "./radial/go";
 import { RadialPage } from "./radial/RadialPage";
 import { addEventListener, removeEventListener, routerHook } from "@decky/api";
-import { afterPatch, ErrorBoundary, findModuleExport, Patch } from "@decky/ui";
+import { afterPatch, ErrorBoundary, findModuleExport, Patch, showModal } from "@decky/ui";
 import { FaRegStickyNote } from "react-icons/fa";
 import { NotesPage } from "./components/NotesPage";
 import { BrowserPage } from "./components/BrowserPage";
@@ -20,6 +20,8 @@ import { speechAllowed } from "./state/speech";
 import { stopVoiceCommand, toggleVoiceCommand, voiceBusy } from "./voice";
 import { ComboAction } from "./types";
 import { MenuItem, MenuItemProps, menuHooks, setTabsPatched, tabHooks } from "./scrolls/hooks";
+import { AttachScreenshotsModal } from "./components/AttachScreenshotsModal";
+import { getPendingScreenshots, screenshotComboArmed } from "./state/pendingScreenshots";
 
 // ---- button combos ----
 
@@ -100,9 +102,13 @@ function findInputService(): InputService | null {
   }
 }
 
+// Not a setting: RB + A only does anything for a little while after a screenshot (the toast says so).
+type Action = ComboAction | "screenshot";
+const SCREENSHOT_COMBO: Button[] = ["R1", "A"];
+
 const ACTIONS: ComboAction[] = ["radial", "commands", "open", "quicknote", "desk", "web", "achievements", "dictate", "voice"];
 
-function enabledCombos(): { action: ComboAction; buttons: Button[] }[] {
+function enabledCombos(): { action: Action; buttons: Button[] }[] {
   const s = getSettings();
   const on: Record<ComboAction, boolean> = {
     radial: true,
@@ -115,14 +121,28 @@ function enabledCombos(): { action: ComboAction; buttons: Button[] }[] {
     dictate: dictationChordEnabled(),
     voice: !!s.voiceCommands && speechAllowed(),
   };
-  return ACTIONS.flatMap((action) => {
+  const list: { action: Action; buttons: Button[] }[] = ACTIONS.flatMap((action) => {
     const buttons = on[action] ? getCombo(action) : null;
     return buttons ? [{ action, buttons }] : [];
   });
+  if (screenshotComboArmed()) list.push({ action: "screenshot", buttons: SCREENSHOT_COMBO });
+  return list;
 }
 
-function runCombo(action: ComboAction) {
-  if (action === "open") notesCombo();
+/** RB + A after a screenshot: the game's notes, with the "add it to a note" prompt on top. */
+function attachScreenshotCombo() {
+  const pending = getPendingScreenshots();
+  if (!pending) return;
+  goNotes(pending.appId);
+  // Once Steam's in front, or the prompt opens behind the game.
+  setTimeout(() => {
+    if (getPendingScreenshots() === pending) showModal(<AttachScreenshotsModal pending={pending} />);
+  }, 400);
+}
+
+function runCombo(action: Action) {
+  if (action === "screenshot") attachScreenshotCombo();
+  else if (action === "open") notesCombo();
   else if (action === "quicknote") quickNoteCombo();
   else if (action === "radial") radialComboPressed(getCombo("radial") ?? []);
   else if (action === "commands") commandsCombo();
@@ -148,7 +168,7 @@ function runCombo(action: ComboAction) {
 function startChordWatch(): () => void {
   // Per controller: the combo that last fired, until its buttons are let go.
   const active = new Map<string, Button[]>();
-  const lastFired = new Map<ComboAction, number>();
+  const lastFired = new Map<Action, number>();
 
   const onButtons = (controller: string, down: Set<Button>, source: string) => {
     reportButtons(sortButtons(down).join(" + "), source);

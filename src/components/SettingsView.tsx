@@ -11,6 +11,7 @@ import { useScrolls } from "../scrolls/host";
 import { openOverlayModal } from "./OverlayModal";
 import { useSeenButtons } from "../opening";
 import { formatDateTime } from "../utils/format";
+import { setSteamScreenshotPopup, steamScreenshotPopupOn } from "../utils/steamScreenshots";
 import { errText } from "../utils/errors";
 import { RadialItemsEditor } from "../radial/RadialSettings";
 import { TomeList } from "../tomes/TomePicker";
@@ -264,9 +265,20 @@ export const SettingsView: FC = () => {
           <PanelSectionRow>
             <ToggleField
               label="Screenshot prompt"
-              description="After you take a screenshot (STEAM + R1), offer to attach it to a note."
+              description="After you take a screenshot (STEAM + R1), say “Press RB + A to add to note”. RB + A then attaches it."
               checked={settings.screenshotPrompt ?? true}
               onChange={(v) => updateSettings({ screenshotPrompt: v })}
+            />
+          </PanelSectionRow>
+          <PanelSectionRow>
+            <ToggleField
+              label="Hide Steam's “Screenshot saved” popup"
+              description="Only the Desk of Madness prompt shows. This is Steam's own setting (Settings → In Game), so it stays off until you turn this back on."
+              checked={steamScreenshotPopupOn() === false || (steamScreenshotPopupOn() === null && !!settings.hideSteamScreenshotPopup)}
+              onChange={(v) => {
+                setSteamScreenshotPopup(!v);
+                updateSettings({ hideSteamScreenshotPopup: v });
+              }}
             />
           </PanelSectionRow>
           <PanelSectionRow>
@@ -431,7 +443,6 @@ export const SettingsView: FC = () => {
           <PanelSectionRow>
             <RadialItemsEditor />
           </PanelSectionRow>
-
           <PanelSectionRow>
             <DropdownItem
               label="Open notes as"

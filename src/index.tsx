@@ -36,7 +36,7 @@ function startScreenshotWatch(): () => void {
       const count = getPendingScreenshots()?.paths.length ?? 1;
       toaster.toast({
         title: "Desk of Madness",
-        body: count === 1 ? "Screenshot saved. Tap here (or open Desk of Madness) to attach it to a note." : `${count} screenshots waiting to be attached.`,
+        body: count === 1 ? "Press RB + A to add to note" : `${count} screenshots: press RB + A to add to note`,
         duration: 5000,
         onClick: () => {
           const pending = getPendingScreenshots();

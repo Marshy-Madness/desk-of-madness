@@ -210,6 +210,8 @@ export interface Settings {
   sort?: SortMode;
   sessionRecap?: boolean;
   screenshotPrompt?: boolean;
+  /** Turned Steam's own "screenshot saved" popup off (Desk of Madness's RB + A prompt replaces it). */
+  hideSteamScreenshotPopup?: boolean;
   /** After a screenshot is attached to a note, delete it from Steam's screenshot library. */
   removeFromSteam?: boolean;
   syncUrl?: string;
