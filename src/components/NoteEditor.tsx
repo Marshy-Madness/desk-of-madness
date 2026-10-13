@@ -1,4 +1,4 @@
-import { FC, ReactNode, useEffect, useRef, useState } from "react";
+import { CSSProperties, FC, Fragment, ReactNode, useEffect, useRef, useState } from "react";
 import { ModalRoot, DialogButton, Dropdown, Focusable, TextField, ToggleField, showModal, ConfirmModal } from "@decky/ui";
 import { FaCrop, FaCamera, FaMicrophone, FaMicrophoneAlt, FaStop, FaTrash, FaParagraph, FaPlus, FaCheckSquare, FaRegSquare, FaFileAlt,
   FaBold, FaItalic, FaUnderline, FaStrikethrough, FaHighlighter, FaCode, FaHeading, FaListUl, FaListOl, FaQuoteRight, FaMinus } from "react-icons/fa";
@@ -35,6 +35,34 @@ const FORMATS: { fmt: Format; icon: ReactNode; label: string }[] = [
   { fmt: "code", icon: <FaCode size={14} />, label: "Code" },
   { fmt: "rule", icon: <FaMinus size={14} />, label: "Divider line" },
 ];
+
+// Formats that start a new group in the toolbar (a thin line goes before them).
+const GROUP_STARTS: Format[] = ["mark", "h1", "bullet", "quote"];
+
+// One slim strip joined to the top of the text box, like a word processor's, instead of big separate buttons.
+const fmtBar: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  alignItems: "center",
+  gap: "2px",
+  padding: "3px",
+  marginTop: "4px",
+  background: "rgba(255,255,255,0.06)",
+  border: "1px solid rgba(255,255,255,0.15)",
+  borderRadius: "6px 6px 0 0",
+};
+const fmtButton = {
+  ...s.smallButton,
+  justifyContent: "center",
+  width: "34px",
+  minWidth: "34px",
+  height: "30px",
+  padding: 0,
+  borderRadius: "4px",
+  background: "transparent",
+  "--dom-bg": "transparent",
+} as CSSProperties;
+const fmtSep: CSSProperties = { width: "1px", height: "20px", margin: "0 3px", background: "rgba(255,255,255,0.18)", flex: "none" };
 
 /** Drop the marker for screenshot `index` (1-based) and renumber the ones after it. */
 function removeImageMarker(body: string, index: number): string {
@@ -297,10 +325,20 @@ export const NoteEditor: FC<{
           </DialogButton>
         )}
       </Focusable>
+      <Focusable flow-children="row" style={fmtBar}>
+        {FORMATS.map((f, i) => (
+          <Fragment key={f.fmt}>
+            {GROUP_STARTS.includes(f.fmt) && i > 0 && <div style={fmtSep} />}
+            <DialogButton style={fmtButton} onClick={() => format(f.fmt)} onOKActionDescription={f.label}>
+              {f.icon}
+            </DialogButton>
+          </Fragment>
+        ))}
+      </Focusable>
       <Focusable
         onActivate={() => typeInto(bodyRef.current)}
         onOKActionDescription="Type"
-        style={{ borderRadius: "4px" }}
+        style={{ borderRadius: "0 0 6px 6px" }}
       >
         <textarea
           ref={bodyRef}
@@ -316,24 +354,13 @@ export const NoteEditor: FC<{
             background: "rgba(0,0,0,0.35)",
             color: "white",
             border: "1px solid rgba(255,255,255,0.15)",
-            borderRadius: "4px",
+            borderTop: "none",
+            borderRadius: "0 0 6px 6px",
             padding: "8px",
             fontSize: "14px",
             fontFamily: "inherit",
           }}
         />
-      </Focusable>
-      <Focusable flow-children="row" style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "4px" }}>
-        {FORMATS.map((f) => (
-          <DialogButton
-            key={f.fmt}
-            style={s.iconButton}
-            onClick={() => format(f.fmt)}
-            onOKActionDescription={f.label}
-          >
-            {f.icon}
-          </DialogButton>
-        ))}
       </Focusable>
       <div style={{ fontSize: "12px", opacity: 0.6, marginTop: "2px" }}>
         Select words (or put the cursor on a line), then pick a style. Typing works too: **bold**, *italic*, # heading, - list.

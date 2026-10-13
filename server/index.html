@@ -124,7 +124,15 @@
   .notetable th, .notetable td { border: 1px solid #3a414d; padding: 5px 8px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
   .notetable th { background: #262b35; } .notetable tr:nth-child(even) td { background: rgba(255,255,255,.03); }
   details.vtable { margin: 6px 0; } details.vtable summary { cursor: pointer; padding: 6px 0; } .tname { font-weight: 600; margin: 10px 0 2px; }
-  .fmtbar { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; } .fmtbar button { min-width: 34px; padding: 4px 8px; }
+  .editbox { border: 1px solid #39404c; border-radius: 8px; background: #262b35; margin: 4px 0 0; overflow: hidden; }
+  .editbox:focus-within { border-color: var(--accent); }
+  .editbox textarea { display: block; border: 0; border-radius: 0; background: transparent; outline: none; padding: 10px 12px; }
+  .fmtbar { display: flex; align-items: center; gap: 2px; padding: 4px; border-bottom: 1px solid #39404c; background: #2b313c; flex-wrap: wrap; }
+  .fmtbar button { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 32px; min-width: 0; min-height: 0; padding: 0;
+    background: transparent; border: 0; border-radius: 6px; font-size: 15px; line-height: 1; color: #c9d1dc; }
+  .fmtbar button:hover { background: #3a414e; color: #fff; } .fmtbar button:active { background: var(--accent); color: #fff; }
+  .fmtbar button small { font-size: 12px; font-weight: 600; } .fmtbar button b, .fmtbar button:not(:has(svg)) { font-weight: 600; }
+  .fsep { flex: none; width: 1px; height: 20px; background: #444b58; margin: 0 4px; }
   .ntable { border: 1px solid var(--line); border-radius: 8px; padding: 8px; margin: 6px 0; }
   .tgrid { display: grid; gap: 4px; margin: 6px 0; } .tgrid input { width: 100%; min-width: 0; box-sizing: border-box; } .tgrid input.th { font-weight: 600; background: #262b35; }
   .reading img { display: block; max-width: 100%; max-height: 70vh; border-radius: 6px; margin: 6px 0; cursor: zoom-in; }
@@ -206,6 +214,7 @@
     section#content { padding: 12px; padding-bottom: max(96px, env(safe-area-inset-bottom)); }
     button, select, input:not([type=checkbox]) { min-height: 44px; }
     button.icon { min-width: 44px; }
+    .fmtbar button { min-height: 0; width: 38px; height: 36px; } /* a slim strip, not a wall of 44px buttons */
     input, select, textarea { font-size: 16px; } /* stops iOS zooming into fields */
     .gamehead h2 { font-size: 20px; } .gamehead .gicon { width: 40px; height: 40px; }
     .card { padding: 12px; } .card img { width: 96px; height: 54px; align-self: center; }
@@ -413,9 +422,15 @@ const tablesHtml = (tables) => (tables || []).map((t) => t.showInView
   ? `${t.title?.trim() ? `<div class="tname">${esc(t.title)}</div>` : ""}${tableGrid(t)}`
   : `<details class="vtable"><summary>▦ ${esc(t.title?.trim() || "Table")} <span class="meta">${t.rows.length} × ${t.columns.length}</span></summary>${tableGrid(t)}</details>`).join("");
 const keepTables = (tables) => (tables || []).filter((t) => t.title.trim() || t.columns.some((c) => c.trim()) || t.rows.some((r) => r.some((c) => c.trim())));
-const FORMATS = [["bold", "<b>B</b>", "Bold"], ["italic", "<i>I</i>", "Italic"], ["underline", "<u>U</u>", "Underline"], ["strike", "<s>S</s>", "Strike through"],
-  ["mark", "🖍", "Highlight"], ["h1", "H1", "Heading"], ["h2", "H2", "Small heading"], ["bullet", "• List", "Bullet list"], ["number", "1. List", "Numbered list"],
-  ["quote", "❝", "Quote"], ["code", "&lt;/&gt;", "Code"], ["rule", "―", "Divider line"]];
+// Format strip above the note box: [format, label, tooltip]; null starts a new group (thin divider).
+const fmtIcon = (d) => `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+const FORMATS = [["bold", "<b>B</b>", "Bold"], ["italic", "<i>I</i>", "Italic"], ["underline", "<u>U</u>", "Underline"], ["strike", "<s>S</s>", "Strike through"], null,
+  ["mark", fmtIcon('<path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/>'), "Highlight"], null,
+  ["h1", "H1", "Heading"], ["h2", "<small>H2</small>", "Small heading"], null,
+  ["bullet", fmtIcon('<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/>'), "Bullet list"],
+  ["number", fmtIcon('<path d="M10 6h10M10 12h10M10 18h10M4 4h1v4M4 8h2M4 14h2l-2 3h2"/>'), "Numbered list"],
+  ["quote", fmtIcon('<path d="M4 6v12M9 8h10M9 12h10M9 16h6"/>'), "Quote"], ["code", fmtIcon('<path d="m8 7-5 5 5 5M16 7l5 5-5 5"/>'), "Code"],
+  ["rule", fmtIcon('<path d="M3 12h18"/>'), "Divider line"]];
 const date = (ms) => (ms ? new Date(ms).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "—");
 const day = (ms) => (ms ? new Date(ms).toLocaleDateString(undefined, { dateStyle: "medium" }) : "—");
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => { const r = (Math.random() * 16) | 0; return (c === "x" ? r : (r & 3) | 8).toString(16); }));
@@ -1629,8 +1644,8 @@ function editNote(original, draft = {}) {
       <div class="row"><div style="flex:2"><label>Title</label><input id="eTitle" style="width:100%" value="${esc(n.title)}"></div>
         <div><label>Type</label><select id="eKind" style="width:100%">${KINDS.map((k) => `<option value="${k[0]}">${k[1]} ${k[2]}</option>`).join("")}</select></div></div>
       <div class="labelrow"><label>Information <span class="meta">— put [img:1] on its own line to show screenshot 1 there</span></label>${micButton("eBody")}</div>
-      <div class="fmtbar">${FORMATS.map(([f, label, title]) => `<button type="button" class="icon" data-fmt="${f}" title="${title}">${label}</button>`).join("")}</div>
-      <textarea id="eBody" rows="9">${esc(n.body)}</textarea>
+      <div class="editbox"><div class="fmtbar">${FORMATS.map((x) => (x ? `<button type="button" data-fmt="${x[0]}" title="${x[2]}" aria-label="${x[2]}">${x[1]}</button>` : '<span class="fsep"></span>')).join("")}</div>
+      <textarea id="eBody" rows="9">${esc(n.body)}</textarea></div>
       <p class="meta" style="margin:2px 0 0">Select words (or put the cursor on a line), then pick a style. Typing works too: **bold**, *italic*, # heading, - list.</p>
       <div class="row">
         <div><label>Tags (comma separated)</label><input id="eTags" style="width:100%" value="${esc((n.tags || []).join(", "))}"></div>
