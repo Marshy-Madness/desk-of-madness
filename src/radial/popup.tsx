@@ -1,13 +1,13 @@
 import { FC } from "react";
 import { DialogButton, Focusable, ModalRoot, showModal } from "@decky/ui";
 import { toaster } from "@decky/api";
-import { FaPlus, FaThumbtack } from "react-icons/fa";
+import { FaPlus } from "react-icons/fa";
 import { backend } from "../api/backend";
 import { closeNotesPage } from "../opening";
 import { openEditor, openNote, recentlyOpened } from "../noteActions";
 import { whenNoteWindowsClose } from "../state/resume";
 import { getSettings } from "../state/notesStore";
-import { kindInfo } from "../utils/kinds";
+import { NoteItem } from "../components/NoteItem";
 import { Game } from "../types";
 import * as s from "../components/styles";
 
@@ -44,34 +44,41 @@ const QuickNotesModal: FC<{ game: Game; onFullPage: () => void; closeModal?: () 
     closeModal?.();
     closeNotesPage();
   };
+  // Full-width rows and cards: the shared button style centres each button at its own width, which in a
+  // column made a ragged stack of pills.
+  const wide = { ...s.smallButton, alignSelf: "stretch", flex: 1, justifyContent: "center" };
   return (
     <ModalRoot className="dom-modal" onCancel={leave}>
-      <h2 style={{ margin: "0 0 8px" }}>{game.name}</h2>
-      <Focusable flow-children="column" style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-        <DialogButton style={{ ...s.primaryButton, justifyContent: "center" }} onClick={then(() => openEditor(game, null))}>
-          <FaPlus size={12} style={{ marginRight: "6px" }} /> New note
+      <Focusable flow-children="row" style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "10px" }}>
+        <h2 style={{ margin: 0, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {game.name}
+        </h2>
+        <DialogButton style={s.primaryButton} onClick={then(() => openEditor(game, null))}>
+          <FaPlus size={12} /> New note
         </DialogButton>
-        <div style={{ maxHeight: "50vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: "4px" }}>
-          {notes.map((n) => (
-            <DialogButton
-              key={n.id}
-              style={{ ...s.smallButton, justifyContent: "flex-start", textAlign: "left", height: "auto", minHeight: "36px" }}
-              onClick={then(() => openNote(game, n))}
-            >
-              <span style={{ marginRight: "8px", display: "inline-flex" }}>{n.pinned ? <FaThumbtack size={12} /> : kindInfo(n.kind).icon}</span>
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.title || "Untitled"}</span>
-            </DialogButton>
-          ))}
-          {!notes.length && <div style={{ fontSize: "13px", opacity: 0.75, padding: "6px 0" }}>No notes for this game yet.</div>}
-        </div>
-        <Focusable flow-children="row" style={{ display: "flex", gap: "6px", marginTop: "6px" }}>
-          <DialogButton style={{ ...s.smallButton, flex: 1, justifyContent: "center" }} onClick={then(onFullPage)}>
-            Full notes page
-          </DialogButton>
-          <DialogButton style={{ ...s.smallButton, flex: 1, justifyContent: "center" }} onClick={leave}>
-            Close
-          </DialogButton>
-        </Focusable>
+      </Focusable>
+      <Focusable
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+          gap: "8px",
+          maxHeight: "55vh",
+          overflowY: "auto",
+          padding: "2px",
+        }}
+      >
+        {notes.map((n) => (
+          <NoteItem key={n.id} appId={game.appId} note={n} onOpen={then(() => openNote(game, n))} onOptions={then(() => openNote(game, n))} />
+        ))}
+      </Focusable>
+      {!notes.length && <div style={{ fontSize: "14px", opacity: 0.75, padding: "16px 0", textAlign: "center" }}>No notes for this game yet.</div>}
+      <Focusable flow-children="row" style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
+        <DialogButton style={wide} onClick={then(onFullPage)}>
+          Full notes page
+        </DialogButton>
+        <DialogButton style={wide} onClick={leave}>
+          Close
+        </DialogButton>
       </Focusable>
     </ModalRoot>
   );

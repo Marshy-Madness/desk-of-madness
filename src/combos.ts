@@ -16,6 +16,15 @@ export type Button = (typeof BUTTONS)[number];
 
 export const MAX_COMBO = 4;
 
+// Buttons Steam's menus need. One of these on its own can't be a combo: it would fire on every press (an
+// A combo opened the browser whenever you picked anything).
+const MENU_BUTTONS = new Set<Button>([
+  "STEAM", "QAM", "VIEW", "MENU", "A", "B", "X", "Y", "UP", "DOWN", "LEFT", "RIGHT", "L1", "R1", "L2", "R2",
+]);
+
+/** Whether `combo` can be used: not empty, and not a single button the menus need. */
+export const usableCombo = (combo: Button[]) => combo.length > 1 || (combo.length === 1 && !MENU_BUTTONS.has(combo[0]));
+
 const LABELS: Partial<Record<Button, string>> = {
   QAM: "···",
   VIEW: "View",
@@ -65,21 +74,32 @@ export function getCombo(action: ComboAction): Button[] | null {
   if (!combo && action === "open" && s.openChord) combo = OLD_CHORDS[s.openChord];
   if (!combo && action === "radial") combo = (s.combos?.tomes as Button[] | undefined) ?? (s.desk?.radial === false ? [] : undefined);
   combo = combo ? sortButtons(combo) : DEFAULT_COMBOS[action];
-  return combo.length ? combo : null;
+  return usableCombo(combo) ? combo : null; // a lone A saved by older versions counts as off
+
 }
 
 // ---- recording a combo: hold the buttons, let go, and the most you held at once becomes the combo ----
 
 // Several feeds report the same buttons; the first one to see a button press is the one we listen to, so
 // another feed reporting "nothing held" can't end the recording early.
-type Recording = { action: ComboAction; most: Button[]; source: string | null; onDone: (combo: Button[]) => void };
+// The button that pressed "Change" reaches us a moment after recording starts (the controller feed lags
+// behind Steam's menus), so buttons pressed in the first moment are left out until they're let go.
+const GRACE_MS = 400;
+type Recording = {
+  action: ComboAction;
+  most: Button[];
+  source: string | null;
+  startedAt: number;
+  ignore: Set<Button>;
+  onDone: (combo: Button[]) => void;
+};
 let recording: Recording | null = null;
 let preview: Button[] = [];
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
 
 export function startRecordingCombo(action: ComboAction, onDone: (combo: Button[]) => void) {
-  recording = { action, most: [], source: null, onDone };
+  recording = { action, most: [], source: null, startedAt: Date.now(), ignore: new Set(), onDone };
   preview = [];
   emit();
 }
@@ -98,6 +118,12 @@ export function isRecordingCombo(): boolean {
 export function feedRecording(source: string, down: Set<Button>) {
   const r = recording;
   if (!r) return;
+  if (Date.now() - r.startedAt < GRACE_MS) {
+    down.forEach((b) => r.ignore.add(b));
+    return;
+  }
+  for (const b of r.ignore) if (!down.has(b)) r.ignore.delete(b);
+  down = new Set([...down].filter((b) => !r.ignore.has(b)));
   if (!r.source && down.size) r.source = source;
   if (r.source !== source) return;
   const now = sortButtons(down);

@@ -9,6 +9,7 @@ import {
   getCombo,
   MAX_COMBO,
   startRecordingCombo,
+  usableCombo,
   useComboRecording,
 } from "../combos";
 import { getSettings, updateSettings, useSettings } from "../state/notesStore";
@@ -41,7 +42,12 @@ const RecordComboModal: FC<{ action: ComboAction; closeModal?: () => void }> = (
       const clash = (Object.keys(ACTION_NAMES) as ComboAction[]).find(
         (other) => other !== action && comboLabel(getCombo(other)) === comboLabel(combo)
       );
-      if (clash) {
+      if (!usableCombo(combo)) {
+        toaster.toast({
+          title: "Pick another combo",
+          body: `${comboLabel(combo)} on its own is needed for Steam's menus. Hold two buttons, or use a back button (L4, R4, L5, R5).`,
+        });
+      } else if (clash) {
         toaster.toast({ title: "Combo already used", body: `${comboLabel(combo)} is the ${ACTION_NAMES[clash]} combo.` });
       } else {
         save(action, combo);
