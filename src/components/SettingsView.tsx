@@ -368,6 +368,15 @@ export const SettingsView: FC = () => {
             />
           </PanelSectionRow>
           <PanelSectionRow>
+            <ToggleField
+              label="Sync when the Deck wakes"
+              description="Catch up with the website right after sleep, so notes you edited elsewhere are waiting."
+              checked={settings.syncOnWake ?? true}
+              disabled={!settings.syncUrl}
+              onChange={(v) => updateSettings({ syncOnWake: v })}
+            />
+          </PanelSectionRow>
+          <PanelSectionRow>
             <div style={{ display: "flex", gap: "6px" }}>
               <ButtonItem layout="below" onClick={test} disabled={busy || !url.trim()}>
                 Test

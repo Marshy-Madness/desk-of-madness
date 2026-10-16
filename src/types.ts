@@ -220,6 +220,8 @@ export interface Settings {
   autoBackup?: boolean;
   /** Minutes between checks for website edits; 0 = manual only. */
   syncInterval?: number;
+  /** Sync as soon as the Deck wakes from sleep, even when checks are manual-only. Default on. */
+  syncOnWake?: boolean;
   bookstoreUrl?: string;
   bookstoreUser?: WorkshopUser;
   /** Pin to screen: turn off Steam's own performance stats so only the to-do list shows. */

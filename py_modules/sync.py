@@ -15,6 +15,8 @@ import wiki
 
 STATE_PATH = os.path.join(decky.DECKY_PLUGIN_SETTINGS_DIR, "sync_state.json")
 CHANGE_DELAY_SEC = 20  # after a local edit, wait this long for more edits before syncing
+WAKE_MIN_SLEEP_SEC = 30  # a suspend at least this long counts as "the Deck woke up"
+WAKE_RETRY_SEC = 120  # after waking, keep trying this long while Wi-Fi reconnects
 
 # Decky's bundled Python may not find the system CA store on its own.
 _CA_FILES = ["/etc/ssl/certs/ca-certificates.crt", "/etc/ca-certificates/extracted/tls-ca-bundle.pem"]
@@ -380,12 +382,38 @@ class Sync:
             return int(settings.get("syncInterval") or 0)
         return 1 if settings.get("autoBackup") else 0
 
+    @staticmethod
+    def _clocks():
+        # CLOCK_MONOTONIC stops while the Deck is suspended and CLOCK_BOOTTIME doesn't,
+        # so the gap between them grows by exactly the time spent asleep.
+        return time.monotonic(), time.clock_gettime(time.CLOCK_BOOTTIME)
+
     async def auto_loop(self):
+        mono, boot = self._clocks()
+        wake_until = 0.0
         while True:
             await asyncio.sleep(10)
+            new_mono, new_boot = self._clocks()
+            slept = (new_boot - boot) - (new_mono - mono)
+            mono, boot = new_mono, new_boot
             settings = storage.get_settings()
+            if slept > WAKE_MIN_SLEEP_SEC and settings.get("syncOnWake", True):
+                decky.logger.info("Woke after %d s asleep; syncing", slept)
+                wake_until = new_mono + WAKE_RETRY_SEC
+            if not settings.get("syncUrl") or self.running:
+                continue
+            if wake_until:
+                try:
+                    await self.sync()
+                    wake_until = 0.0
+                except Exception as e:
+                    if new_mono > wake_until:
+                        wake_until = 0.0
+                        self.last_poll = time.time()
+                        decky.logger.info("Sync after waking gave up: %s", e)
+                continue
             minutes = self.interval_minutes(settings)
-            if not minutes or not settings.get("syncUrl") or self.running:
+            if not minutes:
                 continue
             now = time.time()
             changed = self.dirty_at and now - self.dirty_at > CHANGE_DELAY_SEC
