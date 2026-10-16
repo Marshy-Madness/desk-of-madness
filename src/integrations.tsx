@@ -89,6 +89,7 @@ const BUTTON_FLOW = 0;
 const MAX_CONTROLLERS = 8;
 const FLOW_REFRESH_MS = 30_000; // Steam's test page ends the flow when it closes; start it again now and then
 const REFIRE_MS = 800; // several feeds can report the same press; act on it once
+const HELD_ELSEWHERE_MS = 5000; // a feed that's said nothing for this long no longer counts as holding a combo
 
 function findInputService(): InputService | null {
   try {
@@ -168,9 +169,18 @@ function runCombo(action: Action) {
 function startChordWatch(): () => void {
   // Per controller: the combo that last fired, until its buttons are let go.
   const active = new Map<string, Button[]>();
+  const lastSeen = new Map<string, number>();
   const lastFired = new Map<Action, number>();
 
+  /** Whether another feed is still holding these buttons (one it reported lately; a feed can go quiet without a let-go). */
+  const heldElsewhere = (controller: string, buttons: Button[]) =>
+    [...active].some(
+      ([other, held]) =>
+        other !== controller && Date.now() - (lastSeen.get(other) ?? 0) < HELD_ELSEWHERE_MS && buttons.every((b) => held.includes(b))
+    );
+
   const onButtons = (controller: string, down: Set<Button>, source: string) => {
+    lastSeen.set(controller, Date.now());
     reportButtons(sortButtons(down).join(" + "), source);
     if (isRecordingCombo()) {
       feedRecording(controller, down);
@@ -189,6 +199,9 @@ function startChordWatch(): () => void {
     // Still holding the combo that fired, or a smaller one inside it: nothing new.
     if (current && best.buttons.every((b) => current.includes(b))) return;
     active.set(controller, best.buttons);
+    // The same press, still held, seen through another feed. In Steam's menus several feeds report the Deck's
+    // buttons, and one letting go for a moment fired the combo again, so the page opened and closed at once.
+    if (heldElsewhere(controller, best.buttons)) return;
     if (Date.now() - (lastFired.get(best.action) ?? 0) > REFIRE_MS) {
       lastFired.set(best.action, Date.now());
       runCombo(best.action);
