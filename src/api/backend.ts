@@ -66,6 +66,7 @@ export const backend = {
   testBackupServer: () => call<[], { ok: boolean }>("test_backup_server"),
   backupStatus: () => call<[], BackupStatus>("backup_status"),
 
+  storeLinks: (on: boolean) => call<[boolean], { on: boolean; pages: number }>("store_links", on),
   readerPage: (url: string, refresh = false) => call<[string, boolean], ReaderPage>("reader_page", url, refresh),
   wikiFind: (name: string) => call<[string], WikiSite[]>("wiki_find", name),
   wikiSite: (url: string) => call<[string], WikiSite>("wiki_site", url),

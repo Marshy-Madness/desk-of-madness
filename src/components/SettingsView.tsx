@@ -309,6 +309,14 @@ export const SettingsView: FC = () => {
             />
           </PanelSectionRow>
           <PanelSectionRow>
+            <ToggleField
+              label="Open store games in the browser"
+              description="Picking a game in Steam's store (a search, a tag, a list) opens it in a new browser tab, so the store keeps your place. B goes back to the store."
+              checked={settings.storeLinksInBrowser ?? true}
+              onChange={(v) => updateSettings({ storeLinksInBrowser: v })}
+            />
+          </PanelSectionRow>
+          <PanelSectionRow>
             <DropdownItem
               label="Reader text size"
               rgOptions={TEXT_SIZES}

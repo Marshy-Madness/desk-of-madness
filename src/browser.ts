@@ -2,6 +2,8 @@ import { getSettings } from "./state/notesStore";
 import { putAwayNote } from "./state/resume";
 import { WEB_ROUTE } from "./state/place";
 import { showPage } from "./opening";
+import { addTab } from "./browserTabs";
+import { currentPath } from "./steamWindow";
 import { BrowserMode } from "./types";
 
 // Opening links from notes in Desk of Madness' own browser page (components/BrowserPage.tsx).
@@ -46,6 +48,13 @@ export function openLink(url: string, from?: LinkSource) {
   putAwayNote();
   // Let the note's window close first; an open window would stay on top of the page.
   setTimeout(() => showPage(webPath(url)), 60);
+}
+
+/** Opens a page in a new tab of the browser (games picked in Steam's store, links that ask for a new tab). */
+export function openInNewTab(url: string, mode: BrowserMode = "full") {
+  addTab({ url, mode });
+  // Already in the browser: the new tab just shows. Otherwise the page opens on it.
+  if (!currentPath().startsWith(WEB_ROUTE)) showPage(webPath(url, mode));
 }
 
 /** Splits text into plain parts and web links (http(s)://… or www.…), for showing links as buttons. */

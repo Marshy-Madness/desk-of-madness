@@ -21,6 +21,7 @@ import screenshot
 import scrolls
 import system
 import playstats
+from storelinks import StoreLinks
 
 
 DICTATION_PATH = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "dictation.wav")
@@ -35,6 +36,7 @@ class Plugin:
     workshop = Workshop()
     overlay = Overlay()
     buttons = Buttons()
+    links = StoreLinks()
 
     # games / launches
     async def list_games(self):
@@ -286,6 +288,10 @@ class Plugin:
                                        lambda: {**self.sync.reader_page(url, refresh), "source": "server"},
                                        lambda: {**reader.extract(url, context=SSL_CONTEXT), "cached": False, "source": "device"})
 
+    # store links: games picked in Steam's store open in our browser (storelinks.py)
+    async def store_links(self, on: bool):
+        return await self.links.set_active(on)
+
     # wikis for the 📖 Wiki Scroll (pages are read with reader_page)
     async def wiki_find(self, name: str):
         return await asyncio.to_thread(self._server_or_here, lambda: self.sync.wiki("find", name=name)["wikis"],
@@ -497,6 +503,7 @@ class Plugin:
             self.overlay.task.cancel()
         if self.buttons.task:
             self.buttons.task.cancel()
+        await self.links.stop()
         self.overlay.clear()
         await self.recorder.stop()
         await self.dictation.stop()

@@ -16,7 +16,20 @@ import {
 import { toaster } from "@decky/api";
 import { FaArrowLeft, FaArrowRight, FaBars, FaBookOpen, FaGlobe, FaRedo, FaTimes } from "react-icons/fa";
 import { backend } from "../api/backend";
-import { defaultBrowserMode, linkSource, parseWebPath, toUrl, webPath } from "../browser";
+import { defaultBrowserMode, linkSource, openInNewTab, parseWebPath, toUrl, webPath } from "../browser";
+import {
+  BrowserTab,
+  Entry,
+  activeTab,
+  addTab,
+  closeOtherTabs,
+  closeTab,
+  getTabs,
+  neighbourTab,
+  switchTab,
+  updateTab,
+  useTabsVersion,
+} from "../browserTabs";
 import { closeNotesPage, setNotesPageMounted } from "../opening";
 import { getRunningGame } from "../hooks/useAppLifetime";
 import { NOTES_ROUTE, placePath, rememberAddress } from "../state/place";
@@ -30,15 +43,16 @@ import { newId } from "../utils/format";
 import { articleElements, READER_CSS } from "./ReaderArticle";
 import * as s from "./styles";
 
-// Desk of Madness' browser, for links in notes. Two ways to show a page:
+// Desk of Madness' browser, for links in notes and games picked in Steam's store. Two ways to show a page:
 // - Reader (default): just the article, made by the sync server (or the Deck) without ads, menus or pop-ups,
 //   drawn by us so every button does something sensible.
 // - Full page: the real site in a Steam browser view, for pages the reader can't handle.
 // Buttons: B back · X reader/full page · Y menu · L1/R1 back/forward · L2/R2 page up/down · in the reader the
 // D-pad scrolls (up/down) and picks links (left/right), A follows the picked link. Trackpads work as on the
 // store: left scrolls, right is a mouse.
-
-type Entry = { url: string; mode: BrowserMode };
+// Tabs (browserTabs.ts): games picked in the store, and links that ask for a new tab, open in a tab of their
+// own. With more than one, a row of tabs shows above the toolbar (A switches, X closes); in the full page
+// L2/R2 switch tabs too. B with nothing to go back to puts the browser away (back to the store), tabs and all.
 
 const MIN_ARTICLE = 250; // characters; less than this and the page isn't really an article
 const pageCache = new Map<string, ReaderPage>(); // this session's reader pages, for instant Back
@@ -77,20 +91,74 @@ const host = (url: string) => {
   }
 };
 
+const STORE_ROUTE = "/steamweb";
+
+/** The browser page: one TabView per tab, only the showing one drawn. */
 export const BrowserPage: FC = () => {
-  const start = useMemo<Entry>(
-    () => parseWebPath(currentPath()) ?? { url: "https://duckduckgo.com/html/", mode: defaultBrowserMode() },
-    []
+  // Opened at an address: a tab already showing it (the store just opened one), or the showing tab goes there.
+  useState(() => {
+    const asked = parseWebPath(currentPath());
+    const at = activeTab();
+    if (!at) addTab(asked ?? { url: "https://duckduckgo.com/html/", mode: defaultBrowserMode() });
+    else if (asked && asked.url !== at.cur.url) {
+      at.back.push(at.cur);
+      at.forward.length = 0;
+      updateTab(at.id, { cur: asked });
+    }
+  });
+  useTabsVersion();
+
+  useTrackpadMouse();
+  useEffect(() => {
+    setNotesPageMounted(true);
+    return () => setNotesPageMounted(false);
+  }, []);
+
+  const tabs = getTabs();
+  const activeId = activeTab()?.id;
+  const strip = tabs.length > 1 ? <TabStrip tabs={tabs} activeId={activeId} /> : null;
+  return (
+    <>
+      {tabs.map((t) => (
+        <TabView key={t.id} tab={t} active={t.id === activeId} strip={strip} />
+      ))}
+    </>
   );
-  const [cur, setCur] = useState<Entry>(start);
-  const back = useRef<Entry[]>([]);
-  const forward = useRef<Entry[]>([]);
-  const [page, setPage] = useState<ReaderPage | null>(pageCache.get(start.url) ?? null);
+};
+
+const TabStrip: FC<{ tabs: readonly BrowserTab[]; activeId?: string }> = ({ tabs, activeId }) => (
+  <Focusable flow-children="row" style={{ display: "flex", gap: "4px", padding: "6px 12px 0", flex: "0 0 auto", overflow: "hidden" }}>
+    {tabs.map((t) => {
+      const on = t.id === activeId;
+      return (
+        <DialogButton
+          key={t.id}
+          onClick={() => switchTab(t.id)}
+          onSecondaryButton={() => closeTab(t.id)}
+          onSecondaryActionDescription="Close tab"
+          style={{
+            ...s.smallButton, flex: "0 1 200px", minWidth: "60px", padding: "0 10px", overflow: "hidden", whiteSpace: "nowrap",
+            textOverflow: "ellipsis", justifyContent: "flex-start", textAlign: "left", fontWeight: on ? 700 : 400,
+            background: on ? "rgba(255,255,255,0.22)" : undefined, opacity: on ? 1 : 0.75,
+          }}
+        >
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{t.title || host(t.cur.url)}</span>
+        </DialogButton>
+      );
+    })}
+  </Focusable>
+);
+
+const TabView: FC<{ tab: BrowserTab; active: boolean; strip: ReactNode }> = ({ tab, active, strip }) => {
+  const [cur, setCur] = useState<Entry>(tab.cur);
+  const back = useRef<Entry[]>(tab.back); // the tab's own lists, so they're kept while the browser is away
+  const forward = useRef<Entry[]>(tab.forward);
+  const [page, setPage] = useState<ReaderPage | null>(pageCache.get(tab.cur.url) ?? null);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const refreshNext = useRef(false);
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState(tab.cur.mode === "full" ? tab.title : "");
   const [viewNav, setViewNav] = useState({ back: false, forward: false });
   const [covered, setCovered] = useState(covers);
   const [picked, setPicked] = useState<HTMLAnchorElement | null>(null);
@@ -107,13 +175,10 @@ export const BrowserPage: FC = () => {
   const curRef = useRef(cur);
   curRef.current = cur;
 
-  useTrackpadMouse();
   useEffect(() => {
-    setNotesPageMounted(true);
     coverListeners.add(setCovered);
     return () => {
       coverListeners.delete(setCovered);
-      setNotesPageMounted(false);
       if (view.current) {
         try {
           view.current.SetVisible(false);
@@ -126,19 +191,21 @@ export const BrowserPage: FC = () => {
     };
   }, []);
 
-  // The address follows the page, so putting Desk of Madness away and opening it again comes back here.
+  // The address follows the showing tab's page, so putting Desk of Madness away and opening it again comes back here.
   useEffect(() => {
+    updateTab(tab.id, { cur });
+    if (!active) return;
     const path = webPath(cur.url, cur.mode);
     rememberAddress(path);
     rememberWebAddress(path);
     replacePath(path);
-  }, [cur.url, cur.mode]);
+  }, [cur.url, cur.mode, active]);
 
   // ---- moving around ----
 
   const go = (url: string, mode: BrowserMode = defaultBrowserMode()) => {
     back.current.push(curRef.current);
-    forward.current = [];
+    forward.current.length = 0;
     setNotice(null);
     setCur({ url, mode });
   };
@@ -147,7 +214,8 @@ export const BrowserPage: FC = () => {
     const h = steamHistory() as any;
     const prev: string | undefined = h?.entries?.[h.index - 1]?.pathname;
     rememberAddress(placePath());
-    if (prev?.startsWith(NOTES_ROUTE)) Navigation.NavigateBack(); // back to the note you came from
+    // Back to the note you came from, or to the store where you picked the game.
+    if (prev?.startsWith(NOTES_ROUTE) || prev?.startsWith(STORE_ROUTE)) Navigation.NavigateBack();
     else if (getRunningGame()) closeNotesPage();
     else Navigation.NavigateBack();
   };
@@ -187,7 +255,7 @@ export const BrowserPage: FC = () => {
   // ---- reader ----
 
   useEffect(() => {
-    if (cur.mode !== "reader") return;
+    if (!active || cur.mode !== "reader") return;
     const cached = !refreshNext.current && pageCache.get(cur.url);
     setPicked(null);
     if (cached) {
@@ -222,7 +290,7 @@ export const BrowserPage: FC = () => {
     return () => {
       gone = true;
     };
-  }, [cur.url, cur.mode, reloadKey]);
+  }, [cur.url, cur.mode, reloadKey, active]);
 
   const article = useMemo(() => (page ? articleElements(page.html) : null), [page]);
 
@@ -330,7 +398,7 @@ export const BrowserPage: FC = () => {
     });
     v.on("set-title", (t: string) => setTitle(t));
     v.on("can-go-back-forward-changed", (b: boolean, f: boolean) => setViewNav({ back: b, forward: f }));
-    v.on("new-tab", (url: string) => url && v.LoadURL(url)); // links that open a new tab load here instead
+    v.on("new-tab", (url: string) => url && openInNewTab(url, "full"));
     v.on("node-has-focus", (_id: string, tag: string, type: string) => {
       if (isTextInput(tag, type)) showKeyboard();
     });
@@ -361,19 +429,19 @@ export const BrowserPage: FC = () => {
 
   // Load the page when switching to full, or when Back/Forward/a link changes it.
   useEffect(() => {
-    if (cur.mode !== "full") return;
+    if (!active || cur.mode !== "full") return;
     const v = ensureView();
     if (v && viewUrl.current !== cur.url) {
       viewUrl.current = cur.url;
       v.LoadURL(cur.url);
     }
-  }, [cur.url, cur.mode]);
+  }, [cur.url, cur.mode, active]);
 
   // Keep the view over its box, and hidden whenever it isn't wanted (reader mode, or a menu is open).
   useEffect(() => {
     const v = view.current;
     if (!v) return;
-    const show = cur.mode === "full" && covered === 0;
+    const show = active && cur.mode === "full" && covered === 0;
     let last = "";
     const place = () => {
       const r = viewHost.current?.getBoundingClientRect();
@@ -389,7 +457,7 @@ export const BrowserPage: FC = () => {
     v.SetFocus(show);
     const timer = show ? setInterval(place, 500) : undefined;
     return () => clearInterval(timer);
-  }, [cur.mode, covered, header, footer, viewState]);
+  }, [cur.mode, covered, header, footer, viewState, active]);
 
   // ---- menu ----
 
@@ -430,6 +498,15 @@ export const BrowserPage: FC = () => {
   const openAddress = () =>
     showModal(<AddressModal url={cur.url} onGo={(typed) => go(toUrl(typed), /duckduckgo\.com\/html/.test(toUrl(typed)) ? "full" : undefined)} />);
 
+  const switchTo = (step: 1 | -1) => {
+    const next = neighbourTab(step);
+    if (next) switchTab(next.id);
+  };
+  // The last tab closing puts the browser away; a fresh tab opens next time.
+  const closeThisTab = () => {
+    if (!closeTab(tab.id)) close();
+  };
+
   const menu = () => {
     const src = linkSource();
     const reader = curRef.current.mode === "reader";
@@ -447,6 +524,9 @@ export const BrowserPage: FC = () => {
         <MenuItem onSelected={() => updateSettings({ browserMode: reader ? "reader" : "full" })}>
           Always open links like this ({reader ? "reader" : "full page"})
         </MenuItem>
+        {getTabs().length > 1 && <MenuItem onSelected={() => switchTo(1)}>Next tab</MenuItem>}
+        <MenuItem onSelected={closeThisTab}>Close this tab</MenuItem>
+        {getTabs().length > 1 && <MenuItem onSelected={() => closeOtherTabs(tab.id)}>Close the other tabs</MenuItem>}
         <MenuItem tone="destructive" onSelected={close}>Close the browser</MenuItem>
       </Menu>
     );
@@ -460,15 +540,20 @@ export const BrowserPage: FC = () => {
         return goForward();
       case GamepadButton.TRIGGER_LEFT:
         if (curRef.current.mode === "reader") scrollBy(-0.9);
+        else switchTo(-1);
         return;
       case GamepadButton.TRIGGER_RIGHT:
         if (curRef.current.mode === "reader") scrollBy(0.9);
+        else switchTo(1);
         return;
     }
   };
 
   const reader = cur.mode === "reader";
   const shownTitle = reader ? page?.title || host(cur.url) : title || host(cur.url);
+  useEffect(() => updateTab(tab.id, { title: shownTitle }), [shownTitle]);
+  if (!active) return null; // still mounted: its history, and its full-page view (hidden), stay ready
+
   const canBack = back.current.length > 0 || (!reader && viewNav.back);
 
   return (
@@ -484,6 +569,7 @@ export const BrowserPage: FC = () => {
       onButtonDown={onButtonDown}
     >
       <style>{READER_CSS}</style>
+      {strip}
       <Focusable flow-children="row" style={{ display: "flex", alignItems: "center", gap: "6px", padding: "6px 12px", flex: "0 0 auto" }}>
         <ToolButton label="Back" onClick={() => goBack()} disabled={!canBack}><FaArrowLeft /></ToolButton>
         <ToolButton label="Forward" onClick={goForward} disabled={!forward.current.length && !(viewNav.forward && !reader)}><FaArrowRight /></ToolButton>

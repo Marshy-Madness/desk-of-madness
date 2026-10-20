@@ -44,6 +44,14 @@ export async function updateSettings(patch: Partial<Settings>) {
   await backend.saveSettings(settings);
 }
 
+/** Calls `l` whenever the settings change (or first load); returns the unsubscribe. */
+export function onSettingsChange(l: () => void): () => void {
+  settingsListeners.add(l);
+  return () => {
+    settingsListeners.delete(l);
+  };
+}
+
 export function useSettings(): Settings {
   const [, force] = useState(0);
   useEffect(() => {

@@ -265,6 +265,9 @@ export interface Settings {
   trackpadMouse?: boolean;
   /** How links in notes open: "reader" (default: just the article, no ads) or "full" (the whole site). */
   browserMode?: BrowserMode;
+  /** Games picked in Steam's store open in a new tab of our browser, so the store keeps your place. On unless
+   * turned off. */
+  storeLinksInBrowser?: boolean;
   /** Reader view text size in pixels; unset = 17. */
   readerTextSize?: number;
   /** The Desk: which Tomes show, in what order, and Tome options. */

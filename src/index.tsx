@@ -13,6 +13,7 @@ import { addPendingScreenshot, getPendingScreenshots } from "./state/pendingScre
 import { refreshSpeech } from "./state/speech";
 import { startScrolls } from "./scrolls/host";
 import { startDeckyTabFolders } from "./pluginFolders/deckyTab";
+import { startStoreLinks } from "./storeLinks";
 import { ensureTheme, removeTheme } from "./theme";
 
 /** When you take a screenshot in-game, offer to attach it to a note. */
@@ -66,6 +67,7 @@ export default definePlugin(() => {
   const stopIntegrations = startIntegrations();
   const stopScrolls = startScrolls(); // after the integrations: Scrolls hook into them
   const stopTabFolders = startDeckyTabFolders();
+  const stopStoreLinks = startStoreLinks();
   // The backend emits this after a sync pulls in edits made on the website.
   const onRemoteChange = () => {
     emitDataChanged();
@@ -84,6 +86,7 @@ export default definePlugin(() => {
       stopAchievements();
       stopScrolls();
       stopTabFolders();
+      stopStoreLinks();
       stopIntegrations();
       removeTheme();
       removeEventListener("data_changed", onRemoteChange);

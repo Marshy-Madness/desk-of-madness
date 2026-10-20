@@ -87,6 +87,12 @@ Your Desk server's admin can limit which Scrolls may be installed and how much s
 - **Buttons:** B back (closes at the first page) · X reader / full page · Y menu (address or search, add the page to
   the note, save it as a new note, text size) · L1 / R1 back / forward · L2 / R2 page up / down. In the reader the
   D-pad scrolls (up/down) and picks links on screen (left/right), and A opens the picked link.
+- **Steam store games**: picking a game in Steam's store (a search, a tag, a list, or another game on a game's page)
+  opens it in a new browser tab instead, so the store keeps your place; B goes back to the store, and the next game
+  you pick gets a tab of its own. Turn it off under Settings → Browser.
+- **Tabs**: with more than one open, a row of tabs shows above the toolbar (A switches, X closes); in the full page
+  L2 / R2 switch tabs. Y → menu also has Next tab, Close this tab and Close the other tabs. Tabs stay while the
+  browser is put away.
 - **Trackpads** work as on Steam's store pages on the notes page, in notes and in the browser: the left one scrolls,
   the right one is a mouse and clicking it clicks. Turn it off under Settings → Controls.
 - Server admins choose how long unread reader pages are kept (30, 60, 90, 180 or 365 days, or never) on the website
