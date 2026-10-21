@@ -75,10 +75,48 @@ export function getCombo(action: ComboAction): Button[] | null {
   if (!combo && action === "radial") combo = (s.combos?.tomes as Button[] | undefined) ?? (s.desk?.radial === false ? [] : undefined);
   combo = combo ? sortButtons(combo) : DEFAULT_COMBOS[action];
   return usableCombo(combo) ? combo : null; // a lone A saved by older versions counts as off
-
 }
 
-// ---- recording a combo: hold the buttons, let go, and the most you held at once becomes the combo ----
+// ---- keyboard shortcuts: up to four keys, read by the backend from any keyboard ----
+
+const MODIFIERS = ["CTRL", "ALT", "SHIFT", "META"];
+// Keys that don't type anything or move around, so they're fine without Ctrl, Alt or Super.
+const FREE_KEY = /^(F\d+|PAUSE|SCROLLLOCK|INSERT|MENU|KEY\d+)$/;
+
+const KEY_LABELS: Record<string, string> = {
+  CTRL: "Ctrl", ALT: "Alt", SHIFT: "Shift", META: "Super",
+  ESC: "Esc", BACKSPACE: "Backspace", TAB: "Tab", ENTER: "Enter", SPACE: "Space", CAPSLOCK: "Caps Lock",
+  NUMLOCK: "Num Lock", SCROLLLOCK: "Scroll Lock", PRINT: "Print Screen", PAUSE: "Pause", MENU: "Menu key",
+  HOME: "Home", END: "End", PAGEUP: "Page Up", PAGEDOWN: "Page Down", INSERT: "Insert", DELETE: "Delete",
+  UP: "↑", DOWN: "↓", LEFT: "←", RIGHT: "→", NUMENTER: "Num Enter",
+};
+
+export const keyLabel = (k: string) => KEY_LABELS[k] ?? (k.startsWith("NUM") ? `Num ${k.slice(3)}` : k);
+export const keysLabel = (keys: string[] | null) => (keys?.length ? keys.map(keyLabel).join(" + ") : "Off");
+
+/** Modifiers first (Ctrl, Alt, Shift, Super), then the rest in a fixed order. */
+export const sortKeys = (list: Iterable<string>): string[] => {
+  const keys = [...new Set(list)];
+  const rank = (k: string) => (MODIFIERS.includes(k) ? MODIFIERS.indexOf(k) : MODIFIERS.length);
+  return keys.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+};
+
+/** Whether `keys` can be a shortcut without firing while you type: Ctrl, Alt or Super with another key, or F-keys and the like. */
+export function usableKeys(keys: string[]): boolean {
+  const rest = keys.filter((k) => !MODIFIERS.includes(k));
+  if (!rest.length) return false;
+  return keys.some((k) => k !== "SHIFT" && MODIFIERS.includes(k)) || rest.every((k) => FREE_KEY.test(k));
+}
+
+/** The keyboard shortcut for an action, or null if it has none. */
+export function getKeys(action: ComboAction): string[] | null {
+  const keys = sortKeys(getSettings().keys?.[action] ?? []);
+  return usableKeys(keys) ? keys : null;
+}
+
+// ---- recording a combo: hold the buttons (or keys), let go, and the most you held at once becomes the combo ----
+
+export type ComboKind = "buttons" | "keys";
 
 // Several feeds report the same buttons; the first one to see a button press is the one we listen to, so
 // another feed reporting "nothing held" can't end the recording early.
@@ -87,19 +125,20 @@ export function getCombo(action: ComboAction): Button[] | null {
 const GRACE_MS = 400;
 type Recording = {
   action: ComboAction;
-  most: Button[];
+  kind: ComboKind;
+  most: string[];
   source: string | null;
   startedAt: number;
-  ignore: Set<Button>;
-  onDone: (combo: Button[]) => void;
+  ignore: Set<string>;
+  onDone: (combo: string[]) => void;
 };
 let recording: Recording | null = null;
-let preview: Button[] = [];
+let preview: string[] = [];
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
 
-export function startRecordingCombo(action: ComboAction, onDone: (combo: Button[]) => void) {
-  recording = { action, most: [], source: null, startedAt: Date.now(), ignore: new Set(), onDone };
+export function startRecordingCombo(action: ComboAction, kind: ComboKind, onDone: (combo: string[]) => void) {
+  recording = { action, kind, most: [], source: null, startedAt: Date.now(), ignore: new Set(), onDone };
   preview = [];
   emit();
 }
@@ -115,9 +154,9 @@ export function isRecordingCombo(): boolean {
   return recording !== null;
 }
 
-export function feedRecording(source: string, down: Set<Button>) {
+export function feedRecording(kind: ComboKind, source: string, down: Set<string>) {
   const r = recording;
-  if (!r) return;
+  if (!r || r.kind !== kind) return;
   if (Date.now() - r.startedAt < GRACE_MS) {
     down.forEach((b) => r.ignore.add(b));
     return;
@@ -126,7 +165,7 @@ export function feedRecording(source: string, down: Set<Button>) {
   down = new Set([...down].filter((b) => !r.ignore.has(b)));
   if (!r.source && down.size) r.source = source;
   if (r.source !== source) return;
-  const now = sortButtons(down);
+  const now = kind === "keys" ? sortKeys(down) : sortButtons(down);
   if (now.length > r.most.length) r.most = now.slice(0, MAX_COMBO);
   preview = now.length ? now.slice(0, MAX_COMBO) : r.most;
   if (!now.length && r.most.length) {
@@ -136,7 +175,7 @@ export function feedRecording(source: string, down: Set<Button>) {
   emit();
 }
 
-export function useComboRecording(): { action: ComboAction | null; preview: Button[] } {
+export function useComboRecording(): { action: ComboAction | null; preview: string[] } {
   const action = useSyncExternalStore(
     (l) => {
       listeners.add(l);

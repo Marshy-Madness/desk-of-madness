@@ -14,6 +14,7 @@ from sync import Sync, _SSL as SSL_CONTEXT
 from workshop import Workshop
 from overlay import Overlay
 from buttons import Buttons
+from keyboard import Keyboard
 import reader
 import wiki
 import news
@@ -36,6 +37,7 @@ class Plugin:
     workshop = Workshop()
     overlay = Overlay()
     buttons = Buttons()
+    keyboard = Keyboard()
     links = StoreLinks()
 
     # games / launches
@@ -489,11 +491,15 @@ class Plugin:
     async def buttons_status(self):
         return self.buttons.status()
 
+    async def keyboard_status(self):
+        return self.keyboard.status()
+
     async def _main(self):
         self.sync.task = asyncio.get_event_loop().create_task(self.sync.auto_loop())
         self._style_overlay(storage.get_settings())
         self.overlay.task = asyncio.get_event_loop().create_task(self.overlay.loop())
         self.buttons.task = asyncio.get_event_loop().create_task(self.buttons.loop())
+        self.keyboard.task = asyncio.get_event_loop().create_task(self.keyboard.loop())
         decky.logger.info("Desk of Madness plugin loaded")
 
     async def _unload(self):
@@ -503,6 +509,8 @@ class Plugin:
             self.overlay.task.cancel()
         if self.buttons.task:
             self.buttons.task.cancel()
+        if self.keyboard.task:
+            self.keyboard.task.cancel()
         await self.links.stop()
         self.overlay.clear()
         await self.recorder.stop()

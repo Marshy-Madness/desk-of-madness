@@ -15,7 +15,7 @@ import { AchievementsPage } from "./achievements/AchievementsPage";
 import { CommandsPage } from "./commands/CommandsPage";
 import { stopAllTimers } from "./commands/timers";
 import { releaseTrackpads } from "./trackpads";
-import { Button, feedRecording, getCombo, isRecordingCombo, sortButtons } from "./combos";
+import { Button, ComboKind, feedRecording, getCombo, getKeys, isRecordingCombo, keysLabel, sortButtons, sortKeys } from "./combos";
 import { speechAllowed } from "./state/speech";
 import { stopVoiceCommand, toggleVoiceCommand, voiceBusy } from "./voice";
 import { ComboAction } from "./types";
@@ -109,7 +109,7 @@ const SCREENSHOT_COMBO: Button[] = ["R1", "A"];
 
 const ACTIONS: ComboAction[] = ["radial", "commands", "open", "quicknote", "desk", "web", "achievements", "dictate", "voice"];
 
-function enabledCombos(): { action: Action; buttons: Button[] }[] {
+function enabledCombos(kind: ComboKind): { action: Action; buttons: string[] }[] {
   const s = getSettings();
   const on: Record<ComboAction, boolean> = {
     radial: true,
@@ -122,11 +122,11 @@ function enabledCombos(): { action: Action; buttons: Button[] }[] {
     dictate: dictationChordEnabled(),
     voice: !!s.voiceCommands && speechAllowed(),
   };
-  const list: { action: Action; buttons: Button[] }[] = ACTIONS.flatMap((action) => {
-    const buttons = on[action] ? getCombo(action) : null;
+  const list: { action: Action; buttons: string[] }[] = ACTIONS.flatMap((action) => {
+    const buttons = on[action] ? (kind === "keys" ? getKeys(action) : getCombo(action)) : null;
     return buttons ? [{ action, buttons }] : [];
   });
-  if (screenshotComboArmed()) list.push({ action: "screenshot", buttons: SCREENSHOT_COMBO });
+  if (kind === "buttons" && screenshotComboArmed()) list.push({ action: "screenshot", buttons: SCREENSHOT_COMBO });
   return list;
 }
 
@@ -141,11 +141,12 @@ function attachScreenshotCombo() {
   }, 400);
 }
 
-function runCombo(action: Action) {
+function runCombo(action: Action, kind: ComboKind) {
   if (action === "screenshot") attachScreenshotCombo();
   else if (action === "open") notesCombo();
   else if (action === "quicknote") quickNoteCombo();
-  else if (action === "radial") radialComboPressed(getCombo("radial") ?? []);
+  // From the keyboard there's no stick to aim with, so letting go doesn't pick: arrows and Enter do.
+  else if (action === "radial") radialComboPressed(kind === "keys" ? [] : getCombo("radial") ?? []);
   else if (action === "commands") commandsCombo();
   else if (action === "desk") deskCombo();
   else if (action === "web") webCombo();
@@ -165,33 +166,40 @@ function runCombo(action: Action) {
  * held wins, and a combo doesn't fire again until its buttons are let go. The main source is the backend
  * reading the Deck's controller directly, since Steam's callbacks don't reach plugins in a game on current
  * SteamOS. Steam's own feeds are kept as extras, for other controllers and older Steam versions.
+ * Keyboard shortcuts work the same way on their own: the backend reads every keyboard, and Steam's own
+ * windows report keys while they have focus.
  */
 function startChordWatch(): () => void {
   // Per controller: the combo that last fired, until its buttons are let go.
-  const active = new Map<string, Button[]>();
+  const active = new Map<string, string[]>();
   const lastSeen = new Map<string, number>();
   const lastFired = new Map<Action, number>();
 
   /** Whether another feed is still holding these buttons (one it reported lately; a feed can go quiet without a let-go). */
-  const heldElsewhere = (controller: string, buttons: Button[]) =>
+  const kindOf = new Map<string, ComboKind>();
+  const heldElsewhere = (controller: string, buttons: string[]) =>
     [...active].some(
       ([other, held]) =>
-        other !== controller && Date.now() - (lastSeen.get(other) ?? 0) < HELD_ELSEWHERE_MS && buttons.every((b) => held.includes(b))
+        other !== controller &&
+        kindOf.get(other) === kindOf.get(controller) &&
+        Date.now() - (lastSeen.get(other) ?? 0) < HELD_ELSEWHERE_MS && buttons.every((b) => held.includes(b))
     );
 
-  const onButtons = (controller: string, down: Set<Button>, source: string) => {
+  const onButtons = (controller: string, down: Set<string>, source: string, kind: ComboKind = "buttons") => {
     lastSeen.set(controller, Date.now());
-    reportButtons(sortButtons(down).join(" + "), source);
+    kindOf.set(controller, kind);
+    const sorted = kind === "keys" ? sortKeys(down) : sortButtons(down);
+    reportButtons(kind === "keys" ? (sorted.length ? keysLabel(sorted) : "") : sorted.join(" + "), source);
     if (isRecordingCombo()) {
-      feedRecording(controller, down);
-      active.set(controller, sortButtons(down)); // nothing fires until the recorded buttons are let go
+      feedRecording(kind, controller, down);
+      active.set(controller, sorted); // nothing fires until the recorded buttons are let go
       return;
     }
-    const all = (list: Button[]) => list.every((b) => down.has(b));
+    const all = (list: string[]) => list.every((b) => down.has(b));
     const held = active.get(controller);
     if (held && !all(held)) active.delete(controller);
 
-    const best = enabledCombos()
+    const best = enabledCombos(kind)
       .filter((c) => all(c.buttons))
       .sort((a, b) => b.buttons.length - a.buttons.length)[0];
     if (!best) return;
@@ -204,7 +212,7 @@ function startChordWatch(): () => void {
     if (heldElsewhere(controller, best.buttons)) return;
     if (Date.now() - (lastFired.get(best.action) ?? 0) > REFIRE_MS) {
       lastFired.set(best.action, Date.now());
-      runCombo(best.action);
+      runCombo(best.action, kind);
     }
   };
 
@@ -214,6 +222,12 @@ function startChordWatch(): () => void {
   const onDeck = (names: string[]) => onButtons("deck", new Set(names as Button[]), "Deck controller");
   addEventListener("buttons", onDeck);
   cleanups.push(() => removeEventListener("buttons", onDeck));
+
+  // Every keyboard, read by the backend.
+  const onKeys = (names: string[]) => onButtons("keyboard", new Set(names), "keyboard", "keys");
+  addEventListener("keys", onKeys);
+  cleanups.push(() => removeEventListener("keys", onKeys));
+  cleanups.push(watchSteamKeys((down) => onButtons("steamkeys", down, "keyboard (Steam window)", "keys")));
 
   // Steam's navigation input: only while Steam's screens have focus, but covers any controller.
   const navDown = new Map<number, Set<Button>>();
@@ -274,6 +288,60 @@ function startChordWatch(): () => void {
     cleanups.forEach((c) => c());
     stopAnywhereDictation();
     stopVoiceCommand();
+  };
+}
+
+// What the backend calls the keys (py_modules/keyboard.py), by KeyboardEvent.code.
+function keyName(code: string): string | null {
+  const named: Record<string, string> = {
+    ControlLeft: "CTRL", ControlRight: "CTRL", ShiftLeft: "SHIFT", ShiftRight: "SHIFT", AltLeft: "ALT", AltRight: "ALT",
+    MetaLeft: "META", MetaRight: "META", OSLeft: "META", OSRight: "META", Escape: "ESC", Backspace: "BACKSPACE",
+    Tab: "TAB", Enter: "ENTER", Space: "SPACE", CapsLock: "CAPSLOCK", NumLock: "NUMLOCK", ScrollLock: "SCROLLLOCK",
+    PrintScreen: "PRINT", Pause: "PAUSE", ContextMenu: "MENU", Home: "HOME", End: "END", PageUp: "PAGEUP",
+    PageDown: "PAGEDOWN", Insert: "INSERT", Delete: "DELETE", ArrowUp: "UP", ArrowDown: "DOWN", ArrowLeft: "LEFT",
+    ArrowRight: "RIGHT", Minus: "-", Equal: "=", BracketLeft: "[", BracketRight: "]", Semicolon: ";", Quote: "'",
+    Backquote: "`", Backslash: "\\", Comma: ",", Period: ".", Slash: "/", NumpadMultiply: "NUM*",
+    NumpadSubtract: "NUM-", NumpadAdd: "NUM+", NumpadDecimal: "NUM.", NumpadEnter: "NUMENTER", NumpadDivide: "NUM/",
+  };
+  if (named[code]) return named[code];
+  const m = /^(?:Key([A-Z])|Digit(\d)|(F\d+)|Numpad(\d))$/.exec(code);
+  if (!m) return null;
+  return m[1] ?? m[2] ?? m[3] ?? `NUM${m[4]}`;
+}
+
+/**
+ * Keys pressed while Steam's own big-screen window has focus. A backup for when the backend can't read
+ * keyboards (the plugin's user isn't in the input group); in a game only the backend sees them.
+ */
+function watchSteamKeys(onChange: (down: Set<string>) => void): () => void {
+  let win: Window | undefined;
+  try {
+    win = (window as any).SteamUIStore?.WindowStore?.GamepadUIMainWindowInstance?.BrowserWindow;
+  } catch {
+    win = undefined;
+  }
+  if (!win?.addEventListener) return () => {};
+  const down = new Set<string>();
+  const onKey = (e: KeyboardEvent) => {
+    const name = keyName(e.code);
+    if (!name || e.repeat) return;
+    const had = down.has(name);
+    if (e.type === "keydown") down.add(name);
+    else down.delete(name);
+    if (had !== down.has(name)) onChange(new Set(down));
+  };
+  const onBlur = () => {
+    if (!down.size) return;
+    down.clear(); // the key-up went somewhere else
+    onChange(new Set());
+  };
+  win.addEventListener("keydown", onKey, true);
+  win.addEventListener("keyup", onKey, true);
+  win.addEventListener("blur", onBlur);
+  return () => {
+    win!.removeEventListener("keydown", onKey, true);
+    win!.removeEventListener("keyup", onKey, true);
+    win!.removeEventListener("blur", onBlur);
   };
 }
 

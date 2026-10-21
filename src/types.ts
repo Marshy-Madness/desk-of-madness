@@ -241,6 +241,8 @@ export interface Settings {
   openChord?: OpenChord;
   /** Buttons (1 to 4) for each combo; [] = off, unset = the default. */
   combos?: Partial<Record<ComboAction | "tomes", string[]>>;
+  /** Keyboard shortcut (1 to 4 keys) for each combo, alongside its buttons; unset or [] = none. */
+  keys?: Partial<Record<ComboAction, string[]>>;
   /** The radial menu's slots. */
   radial?: RadialSettings;
   /** Notes from the wheel and the Notes combo: a pop-up over the game (quick) or the full notes page. Unset = popup. */

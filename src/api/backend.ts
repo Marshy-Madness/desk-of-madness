@@ -113,6 +113,7 @@ export const backend = {
     call<[string, string], { overlayRunning: boolean; pinned: boolean }>("pin_overlay", appId, noteId),
   unpinOverlay: () => call<[], { overlayRunning: boolean; pinned: boolean }>("unpin_overlay"),
   buttonsStatus: () => call<[], { devices: number; error: string | null }>("buttons_status"),
+  keyboardStatus: () => call<[], { devices: number; error: string | null }>("keyboard_status"),
   overlayStatus: () =>
     call<[], { overlayRunning: boolean; pinned: boolean; pin?: { appId: string; noteId: string } }>("overlay_status"),
 

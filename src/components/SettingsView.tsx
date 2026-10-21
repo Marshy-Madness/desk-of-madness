@@ -606,8 +606,10 @@ export const SettingsView: FC = () => {
 const ButtonsSeen: FC = () => {
   const seen = useSeenButtons();
   const [deck, setDeck] = useState<{ devices: number; error: string | null } | null>(null);
+  const [keyboard, setKeyboard] = useState<{ devices: number; error: string | null } | null>(null);
   useEffect(() => {
     backend.buttonsStatus().then(setDeck).catch(() => {});
+    backend.keyboardStatus().then(setKeyboard).catch(() => {});
   }, []);
   return (
     <div style={{ fontSize: "12px", opacity: 0.8, padding: "4px 0" }}>
@@ -617,7 +619,12 @@ const ButtonsSeen: FC = () => {
           Deck controller: {deck.devices ? "listening" : `not connected${deck.error ? ` (${deck.error})` : ""}`}
         </div>
       )}
-      <div style={{ opacity: 0.7 }}>Hold your combo and its buttons should show up here.</div>
+      {keyboard && (
+        <div>
+          Keyboards: {keyboard.devices ? `listening to ${keyboard.devices}` : keyboard.error ?? "none connected"}
+        </div>
+      )}
+      <div style={{ opacity: 0.7 }}>Hold your combo (or keyboard shortcut) and its buttons should show up here.</div>
     </div>
   );
 };
