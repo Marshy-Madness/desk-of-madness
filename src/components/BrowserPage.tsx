@@ -37,7 +37,7 @@ import { emitDataChanged, updateSettings, useSettings } from "../state/notesStor
 import { currentPath, mainWindow, replacePath, steamHistory, useChromeHeights } from "../steamWindow";
 import { useTrackpadMouse } from "../trackpads";
 import { rememberWebAddress } from "../radial/go";
-import { BrowserMode, ReaderPage } from "../types";
+import { BrowserMode, NoteSource, ReaderPage } from "../types";
 import { errText } from "../utils/errors";
 import { newId } from "../utils/format";
 import { articleElements, READER_CSS } from "./ReaderArticle";
@@ -478,6 +478,27 @@ const TabView: FC<{ tab: BrowserTab; active: boolean; strip: ReactNode }> = ({ t
     }
   };
 
+  const pageName = () => ((curRef.current.mode === "reader" ? page?.title : title) || host(cur.url)).slice(0, 200);
+  const withSource = (sources: NoteSource[] | undefined) =>
+    sources?.some((x) => x.url === cur.url) ? sources : [...(sources ?? []), { id: newId(), title: pageName(), url: cur.url }];
+
+  const addAsSource = async () => {
+    const src = linkSource();
+    if (!src) return;
+    try {
+      const game = await backend.getGame(src.appId);
+      const note = game.notes.find((n) => n.id === src.noteId);
+      if (!note) throw new Error("The note is gone");
+      if (!note.sources?.some((x) => x.url === cur.url)) {
+        await backend.saveNote(src.appId, { ...note, sources: withSource(note.sources) });
+        emitDataChanged();
+      }
+      toaster.toast({ title: "Source added", body: `to “${src.noteTitle}”` });
+    } catch (e) {
+      toaster.toast({ title: "Couldn't add the source", body: errText(e) });
+    }
+  };
+
   const newNote = async () => {
     const game = getRunningGame() ?? (linkSource() ? { appId: linkSource()!.appId, name: "" } : null);
     if (!game) return;
@@ -517,6 +538,7 @@ const TabView: FC<{ tab: BrowserTab; active: boolean; strip: ReactNode }> = ({ t
         <MenuItem onSelected={toggleMode}>{reader ? "Show the full page" : "Show the reader view"}</MenuItem>
         <MenuItem onSelected={reload}>{reader ? "Make the reader view again" : "Reload"}</MenuItem>
         {src && <MenuItem onSelected={addToNote}>Add this page to “{src.noteTitle}”</MenuItem>}
+        {src && <MenuItem onSelected={addAsSource}>Add this page as a source of “{src.noteTitle}”</MenuItem>}
         {(getRunningGame() || src) && <MenuItem onSelected={newNote}>Save this page as a new note</MenuItem>}
         {reader && <MenuItem onSelected={() => updateSettings({ readerTextSize: Math.min(28, textSize + 2) })}>Bigger text</MenuItem>}
         {reader && <MenuItem onSelected={() => updateSettings({ readerTextSize: Math.max(12, textSize - 2) })}>Smaller text</MenuItem>}

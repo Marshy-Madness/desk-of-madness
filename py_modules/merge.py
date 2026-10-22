@@ -90,6 +90,56 @@ def merge_games(a: dict, b: dict, now_ms: int = 0) -> dict:
     return result
 
 
+# ---------- references and sources across the Workshop (also shared by plugin and server) ----------
+
+import uuid as _uuid
+
+
+def refs_for_workshop(note: dict, find_note) -> list:
+    """A note's references as a Workshop post can hold them: Workshop posts, plus your notes that are published
+    there (others are private, so they're left out). `find_note(appid, note_id)` looks up one of your notes."""
+    out = []
+    for r in note.get("refs") or []:
+        if r.get("workshopId"):
+            out.append({"id": r["id"], "title": r.get("title") or "", "workshopId": r["workshopId"],
+                        **({"appId": r["appId"]} if r.get("appId") else {})})
+        elif r.get("noteId"):
+            target = find_note(str(r.get("appId") or ""), r["noteId"])
+            if target and target.get("bookstoreId"):
+                out.append({"id": r["id"], "title": target.get("title") or r.get("title") or "", "workshopId": target["bookstoreId"],
+                            "appId": r.get("appId")})
+    return out
+
+
+def links_from_workshop(entry: dict, notes: list) -> dict:
+    """References and sources for a note copied from a Workshop post. A reference to a post you already copied
+    into `notes` (that game's notes) points to your copy instead."""
+    out = {}
+    copies = {}
+    for n in notes or []:
+        for key in ((n.get("source") or {}).get("id"), n.get("bookstoreId")):
+            if key:
+                copies[key] = n
+    refs = []
+    for r in entry.get("refs") or []:
+        if not r.get("workshopId"):
+            continue
+        mine = copies.get(r["workshopId"])
+        if mine and str(r.get("appId") or entry.get("appId")) == str(entry.get("appId")):
+            refs.append({"id": str(_uuid.uuid4()), "title": mine.get("title") or r.get("title") or "",
+                         "appId": str(entry.get("appId")), "noteId": mine["id"]})
+        else:
+            refs.append({"id": str(_uuid.uuid4()), "title": r.get("title") or "", "workshopId": r["workshopId"],
+                         **({"appId": r["appId"]} if r.get("appId") else {})})
+    if refs:
+        out["refs"] = refs
+    sources = [{"id": str(_uuid.uuid4()), "title": s.get("title") or s["url"], "url": s["url"]}
+               for s in entry.get("sources") or [] if s.get("url")]
+    if sources:
+        out["sources"] = sources
+    return out
+
+
 # ---------- per-note version history (also shared by plugin and server) ----------
 
 import json as _json

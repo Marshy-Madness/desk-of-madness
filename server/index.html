@@ -123,6 +123,8 @@
   .notetable { width: 100%; border-collapse: collapse; margin: 6px 0 10px; font-size: 14px; } .tablewrap { overflow-x: auto; }
   .notetable th, .notetable td { border: 1px solid #3a414d; padding: 5px 8px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
   .notetable th { background: #262b35; } .notetable tr:nth-child(even) td { background: rgba(255,255,255,.03); }
+  .links { margin: 10px 0; } .links a, .links .ref { display: flex; gap: 8px; align-items: center; padding: 6px 10px; margin-bottom: 4px; border-radius: 6px; background: #262b35; color: inherit; text-decoration: none; cursor: pointer; }
+  .links a:hover, .links .ref:hover { background: #2e3440; } .links .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .links a .t { color: #59bfff; }
   details.vtable { margin: 6px 0; } details.vtable summary { cursor: pointer; padding: 6px 0; } .tname { font-weight: 600; margin: 10px 0 2px; }
   .editbox { border: 1px solid #39404c; border-radius: 8px; background: #262b35; margin: 4px 0 0; overflow: hidden; }
   .editbox:focus-within { border-color: var(--accent); }
@@ -421,6 +423,68 @@ const tableGrid = (t) => `<div class="tablewrap"><table class="notetable">${(t.c
 const tablesHtml = (tables) => (tables || []).map((t) => t.showInView
   ? `${t.title?.trim() ? `<div class="tname">${esc(t.title)}</div>` : ""}${tableGrid(t)}`
   : `<details class="vtable"><summary>▦ ${esc(t.title?.trim() || "Table")} <span class="meta">${t.rows.length} × ${t.columns.length}</span></summary>${tableGrid(t)}</details>`).join("");
+const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u; } };
+const toUrl = (t) => (/^https?:\/\//i.test(t.trim()) ? t.trim() : `https://${t.trim()}`);
+/** Sources with no address aren't kept; a missing title becomes the site's name. */
+const keepSources = (sources) => (sources || []).filter((x) => x.url.trim()).map((x) => ({ ...x, url: toUrl(x.url), title: x.title.trim() || hostOf(toUrl(x.url)) }));
+const workshopEntryUrl = (id) => (workshopUrl ? `${workshopUrl}/?entry=${encodeURIComponent(id)}` : "");
+/** A note's References and Sources. Your own notes are [data-openref] rows when `open` is set (wire with wireRefs). */
+const linksHtml = (n, open = false) => {
+  const refs = (n.refs || []).map((r, i) => {
+    if (r.workshopId) {
+      const href = workshopEntryUrl(r.workshopId);
+      return href ? `<a href="${esc(href)}" target="_blank" rel="noopener">🏭<span class="t">${esc(r.title || "Untitled")}</span><span class="meta">Workshop</span></a>`
+        : `<div class="ref">🏭<span class="t">${esc(r.title || "Untitled")}</span><span class="meta">Workshop</span></div>`;
+    }
+    const other = r.appId && r.appId !== game?.appId ? games.find((g) => g.appId === r.appId)?.name : "";
+    return `<div class="ref" ${open ? `data-openref="${i}"` : ""}>🔗<span class="t">${esc(r.title || "Untitled")}</span>${other ? `<span class="meta">${esc(other)}</span>` : ""}</div>`;
+  }).join("");
+  const srcs = (n.sources || []).filter((x) => /^https?:\/\//i.test(x.url)).map((x) =>
+    `<a href="${esc(x.url)}" target="_blank" rel="noopener">↗<span class="t">${esc(x.title || x.url)}</span><span class="meta">${esc(hostOf(x.url))}</span></a>`).join("");
+  return (refs ? `<div class="links"><label>References</label>${refs}</div>` : "") + (srcs ? `<div class="links"><label>Sources</label>${srcs}</div>` : "");
+};
+/** Opens the note a reference points to (in its own game, if that's another one). */
+async function openRef(r) {
+  if (r.appId && r.appId !== game.appId) { $("#editor").close(); await openGame(r.appId); }
+  const target = game.notes.find((x) => x.id === r.noteId);
+  if (!target) return alert(`“${r.title || "That note"}” isn't in your notes any more.`);
+  viewNote(target);
+}
+const wireRefs = (el, n) => el.querySelectorAll("[data-openref]").forEach((b) => (b.onclick = () => openRef(n.refs[+b.dataset.openref])));
+
+/** Pick one of your notes or guides to point to, from any game. */
+function refPicker(exclude, onPick) {
+  const dlg = $("#panel");
+  let appId = game.appId, notes = game.notes, q = "";
+  const draw = () => {
+    const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+    const list = notes.filter((x) => !exclude.includes(x.id) && words.every((w) => `${x.title} ${x.body} ${(x.tags || []).join(" ")}`.toLowerCase().includes(w)))
+      .sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 100);
+    $("#rList", dlg).innerHTML = list.map((x) => `<div class="version" data-pick="${esc(x.id)}"><span>${kindOf(x.kind)[1]}</span><div class="text"><b>${esc(x.title || "Untitled")}</b><div class="meta">${esc(firstLine(x.body))}</div></div></div>`).join("")
+      || '<p class="meta">Nothing found.</p>';
+    $("#rList", dlg).querySelectorAll("[data-pick]").forEach((el) => (el.onclick = () => {
+      const x = notes.find((y) => y.id === el.dataset.pick);
+      dlg.close();
+      onPick({ id: uid(), title: x.title, appId, noteId: x.id });
+    }));
+  };
+  dlg.innerHTML = `<h2 style="margin-top:0">Add a reference</h2>
+    <div class="row"><div><label>Game</label><select id="rGame" style="width:100%">${games.map((g) => `<option value="${esc(g.appId)}">${esc(g.name)}</option>`).join("")}</select></div>
+      <div style="flex:2"><label>Search</label><input id="rQ" style="width:100%" placeholder="Title, words or #tag"></div></div>
+    <div id="rList" style="max-height:55vh;overflow:auto;margin-top:8px"></div>
+    <div class="toolbar"><button id="rCancel">Cancel</button></div>`;
+  $("#rGame", dlg).value = appId;
+  $("#rGame", dlg).onchange = async (e) => {
+    appId = e.target.value;
+    try { notes = appId === game.appId ? game.notes : (await api(`/api/games/${encodeURIComponent(appId)}`)).game.notes; } catch { notes = []; }
+    draw();
+  };
+  $("#rQ", dlg).oninput = (e) => { q = e.target.value; draw(); };
+  $("#rCancel", dlg).onclick = () => dlg.close();
+  draw();
+  dlg.showModal();
+  $("#rQ", dlg).focus();
+}
 const keepTables = (tables) => (tables || []).filter((t) => t.title.trim() || t.columns.some((c) => c.trim()) || t.rows.some((r) => r.some((c) => c.trim())));
 // Format strip above the note box: [format, label, tooltip]; null starts a new group (thin divider).
 const fmtIcon = (d) => `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
@@ -1546,7 +1610,7 @@ function previewHtml(note) {
   const chips = [`Edited ${date(note.updatedAt)}`, ...(note.tags || []).map((t) => "#" + t),
     note.screenshots?.length ? `📷 ${note.screenshots.length}` : "", note.recordings?.length ? `🎙 ${note.recordings.length}` : ""].filter(Boolean);
   return `<h3 style="margin:0">${esc(note.title)}</h3>${chips.map((c) => `<span class="chip">${esc(c)}</span>`).join("")}
-    <div class="preview md">${note.body?.trim() ? renderMarkup(note.body) : '<span class="meta">(no information)</span>'}${tablesHtml(note.tables)}${check ? `<p style="white-space:pre-wrap">${check}</p>` : ""}</div>`;
+    <div class="preview md">${note.body?.trim() ? renderMarkup(note.body) : '<span class="meta">(no information)</span>'}${tablesHtml(note.tables)}${check ? `<p style="white-space:pre-wrap">${check}</p>` : ""}</div>${linksHtml(note)}`;
 }
 
 /** Bring back an older or deleted version; it becomes the newest edit so it syncs to the Deck. */
@@ -1593,6 +1657,8 @@ function editNote(original, draft = {}) {
   const n = original ? structuredClone(original) : { id: uid(), kind: folderFilter === "guides" ? "guide" : "note", folderId: !["all", "none", "guides", "shared"].includes(folderFilter) ? folderFilter : null, title: "", body: "", tags: [], screenshots: [], recordings: [], checklist: [], pinned: false, spoiler: false, createdAt: 0, updatedAt: 0, launchNumber: null, ...draft };
   n.checklist ??= [];
   n.tables = structuredClone(n.tables || []);
+  n.refs = structuredClone(n.refs || []);
+  n.sources = structuredClone(n.sources || []);
   n.recordings ??= [];
   const dlg = $("#editor");
   let recorder = null, recStart = 0, recTimer = null, discardRecording = false;
@@ -1667,6 +1733,12 @@ function editNote(original, draft = {}) {
           <button class="icon" data-tcol="${ti}:1" ${t.columns.length >= 8 ? "disabled" : ""}>+ Column</button><button class="icon" data-tcol="${ti}:-1" ${t.columns.length <= 1 ? "disabled" : ""}>− Column</button>
           <button class="icon danger" data-tdel="${ti}">Remove table</button></div></div>`).join("")}
       <div class="toolbar"><button id="eAddTable">▦ Add table</button><span class="meta">Tables with "Show when reading" are open when you view the note; the rest fold away.</span></div>
+      <label>References <span class="meta">— notes and guides this one points to</span></label>
+      ${n.refs.map((r, i) => `<div class="check"><span>${r.workshopId ? "🏭" : "🔗"}</span><span style="flex:1">${esc(r.title || "Untitled")}${r.workshopId ? ' <span class="meta">Workshop</span>' : ""}</span><button class="icon danger" data-rmref="${i}">✕</button></div>`).join("")}
+      <div class="toolbar"><button id="eAddRef">🔗 Add reference</button></div>
+      <label>Sources <span class="meta">— web pages, each with a title you choose</span></label>
+      ${n.sources.map((x, i) => `<div class="check"><input type="text" data-st="${i}" placeholder="Title" value="${esc(x.title)}"><input type="text" data-su="${i}" placeholder="https://…" value="${esc(x.url)}" style="flex:2"><button class="icon danger" data-rmsrc="${i}">✕</button></div>`).join("")}
+      <div class="toolbar"><button id="eAddSource">↗ Add source</button></div>
       <label>Screenshots</label>
       <div class="shots">${n.screenshots.map((s, i) => `<div class="shot"><img src="${mediaUrl(game.appId, s.thumb || s.file)}">Screenshot ${i + 1}
           <div class="toolbar" style="margin:4px 0"><button class="icon" data-crop="${i}">Crop</button><button class="icon" data-insert="${i}">In text</button><button class="icon danger" data-rmshot="${i}">Remove</button></div></div>`).join("")}</div>
@@ -1702,6 +1774,8 @@ function editNote(original, draft = {}) {
     dlg.querySelectorAll("[data-tshow]").forEach((el) => (n.tables[+el.dataset.tshow].showInView = el.checked));
     dlg.querySelectorAll("[data-th]").forEach((el) => { const [t, c] = el.dataset.th.split(":").map(Number); n.tables[t].columns[c] = el.value; });
     dlg.querySelectorAll("[data-tc]").forEach((el) => { const [t, r, c] = el.dataset.tc.split(":").map(Number); n.tables[t].rows[r][c] = el.value; });
+    dlg.querySelectorAll("[data-st]").forEach((el) => (n.sources[+el.dataset.st].title = el.value));
+    dlg.querySelectorAll("[data-su]").forEach((el) => (n.sources[+el.dataset.su].url = el.value));
   };
   const resizeTable = (t, cols, rows) => {
     t.columns = Array.from({ length: cols }, (_, i) => t.columns[i] ?? "");
@@ -1724,6 +1798,10 @@ function editNote(original, draft = {}) {
     dlg.querySelectorAll("[data-trow]").forEach((b) => (b.onclick = () => { collect(); const [t, d] = b.dataset.trow.split(":").map(Number); resizeTable(n.tables[t], n.tables[t].columns.length, n.tables[t].rows.length + d); draw(); }));
     dlg.querySelectorAll("[data-tcol]").forEach((b) => (b.onclick = () => { collect(); const [t, d] = b.dataset.tcol.split(":").map(Number); resizeTable(n.tables[t], n.tables[t].columns.length + d, n.tables[t].rows.length); draw(); }));
     dlg.querySelectorAll("[data-tdel]").forEach((b) => (b.onclick = () => { collect(); const t = n.tables[+b.dataset.tdel]; if (keepTables([t]).length && !confirm(`Remove the table "${t.title || "Table"}"?`)) return; n.tables.splice(+b.dataset.tdel, 1); draw(); }));
+    $("#eAddRef", dlg).onclick = () => { collect(); refPicker([n.id, ...n.refs.map((r) => r.noteId)], (ref) => { n.refs.push(ref); draw(); }); };
+    dlg.querySelectorAll("[data-rmref]").forEach((b) => (b.onclick = () => { collect(); n.refs.splice(+b.dataset.rmref, 1); draw(); }));
+    $("#eAddSource", dlg).onclick = () => { collect(); n.sources.push({ id: uid(), title: "", url: "" }); draw(); dlg.querySelector(`[data-st="${n.sources.length - 1}"]`)?.focus(); };
+    dlg.querySelectorAll("[data-rmsrc]").forEach((b) => (b.onclick = () => { collect(); n.sources.splice(+b.dataset.rmsrc, 1); draw(); }));
     $("#eNewItem", dlg).onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); addItem(); } };
     dlg.querySelectorAll("[data-del]").forEach((b) => (b.onclick = () => { collect(); n.checklist.splice(+b.dataset.del, 1); draw(); }));
     dlg.querySelectorAll("[data-insert]").forEach((b) => (b.onclick = () => { collect(); n.body += `${n.body && !n.body.endsWith("\n") ? "\n" : ""}[img:${+b.dataset.insert + 1}]\n`; draw(); }));
@@ -1780,6 +1858,9 @@ function editNote(original, draft = {}) {
       if (!n.checklist.length) delete n.checklist;
       n.tables = keepTables(n.tables);
       if (!n.tables.length) delete n.tables;
+      if (!n.refs.length) delete n.refs;
+      n.sources = keepSources(n.sources);
+      if (!n.sources.length) delete n.sources;
       const now = Date.now();
       n.updatedAt = now; if (!n.createdAt) n.createdAt = now;
       const i = game.notes.findIndex((x) => x.id === n.id);
@@ -1825,7 +1906,8 @@ function viewNote(note) {
       ${rest.length ? `<label>${used.size ? "More screenshots" : "Screenshots"}</label><div class="shots">${rest.map(({ sh, i }) => `<div class="shot"><img data-full="${full(sh)}" src="${mediaUrl(game.appId, sh.thumb || sh.file)}" loading="lazy" alt="Screenshot ${i + 1}"></div>`).join("")}</div>` : ""}
       ${(n.recordings || []).map((r) => `<div class="toolbar" style="margin:4px 0"><audio controls preload="none" src="${mediaUrl(game.appId, r.file)}"></audio><span class="meta">${r.durationSec ? Math.round(r.durationSec) + "s · " : ""}${esc(date(r.createdAt))}</span></div>
         ${r.transcript ? `<div class="said"><span class="meta">🎙 said:</span>${esc(r.transcript)}</div>` : ""}`).join("")}
-      ${!body.trim() && !n.checklist?.length && !n.tables?.length && !n.screenshots?.length && !n.recordings?.length ? '<p class="meta">(no information)</p>' : ""}
+      ${linksHtml(n, true)}
+      ${!body.trim() && !n.checklist?.length && !n.tables?.length && !n.screenshots?.length && !n.recordings?.length && !n.refs?.length && !n.sources?.length ? '<p class="meta">(no information)</p>' : ""}
     </div>
     <div class="toolbar actions"><button class="primary" id="vEdit">✏️ Edit</button><button id="vClose">Close</button></div>`;
   const vb = $("#vBody", dlg);
@@ -1840,6 +1922,7 @@ function viewNote(note) {
     box.onclose = () => box.remove();
     document.body.appendChild(box); box.showModal();
   };
+  wireRefs(dlg, n);
   dlg.querySelectorAll("[data-vcheck]").forEach((el) => (el.onchange = () => {
     const i = game.notes.findIndex((x) => x.id === n.id);
     if (i < 0) return;
@@ -1889,7 +1972,7 @@ function viewShared(s) {
     return sh ? `<img src="${m(sh.file)}" style="max-width:100%;border-radius:6px">` : "";
   }).join("");
   dlg.innerHTML = `<h2 style="margin-top:0">${esc(s.note.title)}</h2><span class="chip" style="background:#1f5c45">👥 Shared by ${esc(s.fromName)}</span><span class="chip">Edited ${date(s.note.updatedAt)}</span>
-    <div class="preview md ${s.note.spoiler ? "spoiler" : ""}" onclick="this.classList.remove('spoiler')">${body || '<span class="meta">(no information)</span>'}${tablesHtml(s.note.tables)}${(s.note.checklist || []).map((c) => `<div>${c.done ? "☑" : "☐"} ${esc(c.text)}</div>`).join("")}</div>
+    <div class="preview md ${s.note.spoiler ? "spoiler" : ""}" onclick="this.classList.remove('spoiler')">${body || '<span class="meta">(no information)</span>'}${tablesHtml(s.note.tables)}${(s.note.checklist || []).map((c) => `<div>${c.done ? "☑" : "☐"} ${esc(c.text)}</div>`).join("")}</div>${linksHtml(s.note)}
     <div class="shots">${s.note.screenshots.map((sh) => `<div class="shot"><img src="${m(sh.thumb || sh.file)}"></div>`).join("")}</div>
     ${(s.note.recordings || []).map((r) => `<audio controls preload="none" src="${m(r.file)}"></audio>${r.transcript ? `<div class="said"><span class="meta">🎙 said:</span>${esc(r.transcript)}</div>` : ""}`).join(" ")}
     <div class="toolbar"><button class="primary" id="pCopy">Copy to my notes</button><button id="pClose">Close</button></div>`;

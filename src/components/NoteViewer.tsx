@@ -13,6 +13,7 @@ import * as s from "./styles";
 import { openOverlayModal } from "./OverlayModal";
 import { FormattedText } from "./FormattedText";
 import { TablesView } from "./NoteTables";
+import { LinksView } from "./NoteLinks";
 import { isNoteOnWheel, toggleNoteOnWheel } from "../radial/items";
 
 const ImageModal: FC<{ appId: string; file: string; closeModal?: () => void }> = ({ appId, file, closeModal }) => (
@@ -133,7 +134,7 @@ export const NoteViewer: FC<{
             <Fragment key={i} />
           );
         })}
-        {!note.body.trim() && !note.checklist?.length && !note.tables?.length && <div style={{ opacity: 0.6 }}>No information yet.</div>}
+        {!note.body.trim() && !note.checklist?.length && !note.tables?.length && !note.refs?.length && !note.sources?.length && <div style={{ opacity: 0.6 }}>No information yet.</div>}
       </Focusable>
 
       <TablesView tables={note.tables} />
@@ -169,6 +170,8 @@ export const NoteViewer: FC<{
           ))}
         </Focusable>
       )}
+
+      <LinksView appId={appId} refs={note.refs} sources={note.sources} from={{ appId, noteId: note.id, noteTitle: note.title }} beforeOpen={closeModal} />
 
       {note.recordings.length > 0 && (
         <Focusable style={{ ...s.toolbar, flexWrap: "wrap" }}>

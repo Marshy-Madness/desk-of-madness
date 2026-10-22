@@ -10,6 +10,7 @@ import { MediaImage, MediaLoader } from "./MediaImage";
 import * as s from "./styles";
 import { FormattedText } from "./FormattedText";
 import { TablesView } from "./NoteTables";
+import { LinksView } from "./NoteLinks";
 
 const ImageModal: FC<{ appId: string; file: string; loader?: MediaLoader; closeModal?: () => void }> = ({
   appId,
@@ -112,6 +113,7 @@ export const ReadOnlyNote: FC<{
               </div>
             )}
           </Focusable>
+          <LinksView appId={appId} refs={note.refs} sources={note.sources} beforeOpen={closeModal} />
           {note.recordings.length > 0 && (
             <Focusable style={{ ...s.toolbar, flexWrap: "wrap" }}>
               {note.recordings.map((rec, i) => (

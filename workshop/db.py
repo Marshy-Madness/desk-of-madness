@@ -58,9 +58,11 @@ MIGRATIONS = [
     ("entries", "copies", "INTEGER DEFAULT 0"),      # times saved to someone's notes
     ("likes", "created_at", "INTEGER"),              # for 🔥 Trending (older likes have none)
     ("entries", "tables", "TEXT DEFAULT '[]'"),      # the note's tables [{id, title, columns, rows, showInView}]
+    ("entries", "refs", "TEXT DEFAULT '[]'"),        # other posts it points to [{id, title, workshopId, appId?}]
+    ("entries", "sources", "TEXT DEFAULT '[]'"),     # web pages it got its information from [{id, title, url}]
 ]
 
-JSON_COLS = ("tags", "checklist", "tables", "screenshots", "recordings", "editors")
+JSON_COLS = ("tags", "checklist", "tables", "refs", "sources", "screenshots", "recordings", "editors")
 
 
 def conn() -> sqlite3.Connection:

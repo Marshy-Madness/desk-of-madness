@@ -2,6 +2,7 @@ import { ConfirmModal, showModal } from "@decky/ui";
 import { backend } from "./api/backend";
 import { NoteEditor, folderPath } from "./components/NoteEditor";
 import { NoteViewer } from "./components/NoteViewer";
+import { setNoteOpener } from "./components/NoteLinks";
 import { DeletedNotesModal, VersionHistoryModal } from "./components/VersionHistory";
 import { emitDataChanged, getSettings, updateSettings } from "./state/notesStore";
 import { EditorDraft, showNoteModal } from "./state/resume";
@@ -84,6 +85,8 @@ export function openNote(game: Game, note: Note) {
     />
   );
 }
+
+setNoteOpener(openNote);
 
 export const openDeleted = (appId: string) => showModal(<DeletedNotesModal appId={appId} />);
 

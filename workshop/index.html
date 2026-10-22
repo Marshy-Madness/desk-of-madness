@@ -42,6 +42,8 @@
   .notetable { width: 100%; border-collapse: collapse; margin: 6px 0 10px; font-size: 14px; } .tablewrap { overflow-x: auto; }
   .notetable th, .notetable td { border: 1px solid var(--line); padding: 5px 8px; text-align: left; vertical-align: top; overflow-wrap: anywhere; white-space: pre-wrap; }
   .notetable th { background: var(--panel); } .notetable tr:nth-child(even) td { background: rgba(255,255,255,.03); }
+  .links { margin: 10px 0; } .links a { display: flex; gap: 8px; align-items: center; padding: 6px 10px; margin-bottom: 4px; border-radius: 6px; background: var(--line); text-decoration: none; color: inherit; cursor: pointer; }
+  .links a:hover { background: #3a3448; } .links .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .links a[target] .t { color: var(--accent); }
   .ntable { border: 1px solid var(--line); border-radius: 8px; padding: 8px; margin: 6px 0; }
   .tgrid { display: grid; gap: 4px; margin: 6px 0; } .tgrid input { width: 100%; min-width: 0; box-sizing: border-box; } .tgrid input.th { font-weight: 600; background: var(--chip); }
   details.vtable { margin: 6px 0; } details.vtable summary { cursor: pointer; padding: 6px 0; } .tname { font-weight: 600; margin: 10px 0 2px; }
@@ -106,6 +108,7 @@
 <main id="main"></main>
 <dialog id="dlg"></dialog>
 <dialog id="dlg2"></dialog>
+<dialog id="dlg3"></dialog>
 
 <script>
 window.DeskApp = window.DeskApp || window.SessionNotesApp; // the Android app's bridge (SessionNotesApp in apps before the rename)
@@ -114,6 +117,41 @@ const $ = (s, el = document) => el.querySelector(s);
 /** A post's tables: "Show when reading" ones are open, the rest fold away. */
 const tableGrid = (t) => `<div class="tablewrap"><table class="notetable">${t.columns.some((c) => c.trim()) ? `<thead><tr>${t.columns.map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead>` : ""}
   <tbody>${t.rows.map((r) => `<tr>${t.columns.map((_, i) => `<td>${esc(r[i] || "")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u; } };
+const toUrl = (t) => (/^https?:\/\//i.test(t.trim()) ? t.trim() : `https://${t.trim()}`);
+/** Sources with no address aren't kept; a missing title becomes the site's name. */
+const keepSources = (sources) => (sources || []).filter((x) => x.url.trim()).map((x) => ({ ...x, url: toUrl(x.url), title: x.title.trim() || hostOf(toUrl(x.url)) }));
+/** A post's References (other posts, [data-ref] links) and Sources (web pages). */
+const linksHtml = (e) => {
+  const refs = (e.refs || []).map((r) => `<a href="/?entry=${encodeURIComponent(r.workshopId)}" data-ref="${esc(r.workshopId)}">🔗<span class="t">${esc(r.title || "Untitled")}</span></a>`).join("");
+  const srcs = (e.sources || []).filter((x) => /^https?:\/\//i.test(x.url)).map((x) =>
+    `<a href="${esc(x.url)}" target="_blank" rel="noopener nofollow ugc">↗<span class="t">${esc(x.title || x.url)}</span><span class="meta">${esc(hostOf(x.url))}</span></a>`).join("");
+  return (refs ? `<div class="links"><label>References</label>${refs}</div>` : "") + (srcs ? `<div class="links"><label>Sources</label>${srcs}</div>` : "");
+};
+
+/** Pick another Workshop post to point to (this game's first; search finds any). */
+function refPicker(appId, exclude, onPick) {
+  const d = $("#dlg3");
+  let q = "", timer = null;
+  const load = async () => {
+    const list = (await api(`/api/entries?${new URLSearchParams({ q, ...(q ? {} : { appId }), sort: q ? "top" : "updated" })}`)).filter((x) => !exclude.includes(x.id));
+    $("#rList", d).innerHTML = list.map((x) => `<div class="card" data-pick="${esc(x.id)}"><div><b>${kindOf(x.kind)[1]} ${esc(x.title)}</b><div class="meta">🎮 ${esc(x.gameName)} · by ${esc(x.author.name)}</div></div></div>`).join("")
+      || '<p class="meta">Nothing found.</p>';
+    $("#rList", d).querySelectorAll("[data-pick]").forEach((el) => (el.onclick = () => {
+      const x = list.find((y) => y.id === el.dataset.pick);
+      d.close();
+      onPick({ id: uid(), title: x.title, workshopId: x.id, appId: x.appId });
+    }));
+  };
+  d.innerHTML = `<h2 style="margin-top:0">Add a reference</h2>
+    <input id="rQ" style="width:100%" placeholder="Search every post…">
+    <div id="rList" style="max-height:55vh;overflow:auto;margin-top:8px"></div>
+    <div class="toolbar"><button id="rCancel">Cancel</button></div>`;
+  $("#rQ", d).oninput = (ev) => { q = ev.target.value.trim(); clearTimeout(timer); timer = setTimeout(load, 250); };
+  $("#rCancel", d).onclick = () => d.close();
+  load();
+  d.showModal();
+}
 const keepTables = (tables) => (tables || []).filter((t) => t.title.trim() || t.columns.some((c) => c.trim()) || t.rows.some((r) => r.some((c) => c.trim())));
 const tablesHtml = (tables) => (tables || []).map((t) => t.showInView
   ? `${t.title.trim() ? `<div class="tname">${esc(t.title)}</div>` : ""}${tableGrid(t)}`
@@ -178,6 +216,7 @@ async function start() {
   if (params.get("packs")) return packsPage();
   if (params.get("mine")) return minePage();
   if (params.get("pack")) { home(); return openPack(params.get("pack")); }
+  if (params.get("entry")) { home(); return openEntry(params.get("entry")); }
   if (params.get("scrolls")) return scrollsPage();
   if (params.get("scroll")) { scrollsPage(); return openScroll(params.get("scroll")); }
   home();
@@ -442,6 +481,7 @@ async function openEntry(id, revealed = false, prefetched = null) {
       <div class="body">${body || '<span class="meta">(no text)</span>'}</div>
       ${tablesHtml(e.tables)}
       ${e.checklist.length ? `<div>${e.checklist.map((c) => `<div>☐ ${esc(c.text)}</div>`).join("")}</div>` : ""}
+      ${linksHtml(e)}
       ${e.recordings.map((r) => `<audio controls preload="none" src="${media(r.file)}"></audio>`).join(" ")}
       <div class="gallery">${e.screenshots.filter((_, i) => !inlined.has(i)).map((s) => `<img src="${media(s.thumb || s.file)}" data-full="${esc(s.file)}">`).join("")}</div>`}
     <div class="toolbar">
@@ -460,6 +500,7 @@ async function openEntry(id, revealed = false, prefetched = null) {
     openEntry(id, true, e).then(() => { if ($("#comment", dlg)) $("#comment", dlg).value = draft; });
   };
   dlg.querySelectorAll(".gallery img").forEach((img) => (img.onclick = () => window.open(media(img.dataset.full))));
+  dlg.querySelectorAll("[data-ref]").forEach((a) => (a.onclick = (ev) => { ev.preventDefault(); openEntry(a.dataset.ref).catch(() => alert("That post isn't on the Workshop any more.")); }));
   $("#like", dlg).onclick = async () => { if (!me) return (location.href = signIn()); await api(`/api/entries/${id}/like`, { method: "POST" }); openEntry(id, revealed); };
   if ($("#edit", dlg)) $("#edit", dlg).onclick = () => editEntry(e);
   $("#history", dlg).onclick = () => showHistory(e);
@@ -532,6 +573,8 @@ function editEntry(orig, defaults) {
   const e = orig ? structuredClone(orig) : { title: "", body: "", kind: "guide", tags: [], checklist: [], tables: [], screenshots: [], recordings: [], spoiler: false,
     spoilerLabel: "", editPolicy: "owner", editors: [], allowCopy: true, appId: defaults.appId || "", gameName: defaults.gameName || "" };
   e.tables = e.tables || [];
+  e.refs = e.refs || [];
+  e.sources = e.sources || [];
   const canAdmin = isNew || orig.isAuthor || admin;
   const d = $("#dlg2");
   const draw = () => {
@@ -556,6 +599,12 @@ function editEntry(orig, defaults) {
           <button data-tcol="${ti}:1" ${t.columns.length >= 8 ? "disabled" : ""}>+ Column</button><button data-tcol="${ti}:-1" ${t.columns.length <= 1 ? "disabled" : ""}>− Column</button>
           <button class="danger" data-tdel="${ti}">Remove table</button></div></div>`).join("")}
       <div class="toolbar"><button id="fAddTable">▦ Add table</button><span class="meta">Tables with "Show when reading" are open when people view the post; the rest fold away.</span></div>
+      <label>References <span class="meta">— other posts this one points to</span></label>
+      ${e.refs.map((r, i) => `<div class="check"><span style="flex:1">🔗 ${esc(r.title || "Untitled")}</span><button data-rfdel="${i}" class="danger">✕</button></div>`).join("")}
+      <div class="toolbar"><button id="fAddRef">🔗 Add reference</button></div>
+      <label>Sources <span class="meta">— web pages, each with a title you choose</span></label>
+      ${e.sources.map((x, i) => `<div class="check"><input type="text" data-st="${i}" placeholder="Title" value="${esc(x.title)}"><input type="text" data-su="${i}" placeholder="https://…" value="${esc(x.url)}" style="flex:2"><button data-srcdel="${i}" class="danger">✕</button></div>`).join("")}
+      <div class="toolbar"><button id="fAddSource">↗ Add source</button></div>
       <label>Screenshots</label><div class="toolbar">${e.screenshots.map((s, i) => `<div class="shot"><img src="${media(s.thumb || s.file)}">Screenshot ${i + 1} <button data-sdel="${i}" class="danger">✕</button></div>`).join("")}</div>
       <input type="file" id="fShots" accept="image/*" multiple>
       <label>Voice recordings</label>${e.recordings.map((r, i) => `<div class="toolbar"><audio controls preload="none" src="${media(r.file)}"></audio><button data-rdel="${i}" class="danger">✕</button></div>`).join("")}
@@ -583,6 +632,8 @@ function editEntry(orig, defaults) {
     d.querySelectorAll("[data-tshow]").forEach((el) => (e.tables[+el.dataset.tshow].showInView = el.checked));
     d.querySelectorAll("[data-th]").forEach((el) => { const [t, c] = el.dataset.th.split(":").map(Number); e.tables[t].columns[c] = el.value; });
     d.querySelectorAll("[data-tc]").forEach((el) => { const [t, r, c] = el.dataset.tc.split(":").map(Number); e.tables[t].rows[r][c] = el.value; });
+    d.querySelectorAll("[data-st]").forEach((el) => (e.sources[+el.dataset.st].title = el.value));
+    d.querySelectorAll("[data-su]").forEach((el) => (e.sources[+el.dataset.su].url = el.value));
     e.spoiler = $("#fSpoiler", d).checked; e.spoilerLabel = $("#fSpoilerLabel", d).value;
     if ($("#fPolicy", d)) { e.editPolicy = $("#fPolicy", d).value; e.allowCopy = $("#fCopy", d).checked; }
   };
@@ -596,6 +647,10 @@ function editEntry(orig, defaults) {
     d.querySelectorAll("[data-trow]").forEach((b) => (b.onclick = () => { collect(); const [t, n] = b.dataset.trow.split(":").map(Number); resizeTable(e.tables[t], e.tables[t].columns.length, e.tables[t].rows.length + n); draw(); }));
     d.querySelectorAll("[data-tcol]").forEach((b) => (b.onclick = () => { collect(); const [t, n] = b.dataset.tcol.split(":").map(Number); resizeTable(e.tables[t], e.tables[t].columns.length + n, e.tables[t].rows.length); draw(); }));
     d.querySelectorAll("[data-tdel]").forEach((b) => (b.onclick = () => { collect(); const t = e.tables[+b.dataset.tdel]; if (keepTables([t]).length && !confirm(`Remove the table "${t.title || "Table"}"?`)) return; e.tables.splice(+b.dataset.tdel, 1); draw(); }));
+    $("#fAddRef", d).onclick = () => { collect(); refPicker(e.appId, [orig?.id, ...e.refs.map((r) => r.workshopId)], (ref) => { e.refs.push(ref); draw(); }); };
+    d.querySelectorAll("[data-rfdel]").forEach((b) => (b.onclick = () => { collect(); e.refs.splice(+b.dataset.rfdel, 1); draw(); }));
+    $("#fAddSource", d).onclick = () => { collect(); e.sources.push({ id: uid(), title: "", url: "" }); draw(); d.querySelector(`[data-st="${e.sources.length - 1}"]`)?.focus(); };
+    d.querySelectorAll("[data-srcdel]").forEach((b) => (b.onclick = () => { collect(); e.sources.splice(+b.dataset.srcdel, 1); draw(); }));
     $("#fSpoiler", d).onchange = (ev) => $("#fSpoilerLabel", d).classList.toggle("hidden", !ev.target.checked);
     if ($("#fPolicy", d)) $("#fPolicy", d).onchange = (ev) => $("#fEditors", d).classList.toggle("hidden", ev.target.value !== "select");
     const add = () => { collect(); const t = $("#fNewItem", d).value.trim(); if (!t) return; e.checklist.push({ id: uid(), text: t }); draw(); $("#fNewItem", d).focus(); };
@@ -625,7 +680,7 @@ function editEntry(orig, defaults) {
     };
     $("#fSave", d).onclick = async () => {
       collect();
-      const payload = { title: e.title, body: e.body, kind: e.kind, tags: e.tags, checklist: e.checklist, tables: keepTables(e.tables), screenshots: e.screenshots, recordings: e.recordings,
+      const payload = { title: e.title, body: e.body, kind: e.kind, tags: e.tags, checklist: e.checklist, tables: keepTables(e.tables), refs: e.refs, sources: keepSources(e.sources), screenshots: e.screenshots, recordings: e.recordings,
         spoiler: e.spoiler, spoilerLabel: e.spoilerLabel, editPolicy: e.editPolicy, editors: e.editors.map((u) => u.steamId), allowCopy: e.allowCopy };
       try {
         const saved = isNew ? await api("/api/entries", { method: "POST", json: { ...payload, appId: e.appId, gameName: e.gameName } })

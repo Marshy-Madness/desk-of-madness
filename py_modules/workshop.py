@@ -8,6 +8,7 @@ import urllib.request
 import uuid
 
 import decky
+import merge
 import storage
 from sync import _SSL, clean_url
 
@@ -17,6 +18,10 @@ SYNC_STATE = os.path.join(decky.DECKY_PLUGIN_SETTINGS_DIR, "sync_state.json")
 CACHE_DIR = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "bookstore_cache")
 MIME = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp", "gif": "image/gif",
         "wav": "audio/wav", "webm": "audio/webm", "ogg": "audio/ogg", "m4a": "audio/mp4", "mp3": "audio/mpeg"}
+
+
+def _find_note(appid: str, note_id: str):
+    return next((n for n in storage.load_game(appid).get("notes", []) if n.get("id") == note_id), None) if appid else None
 
 
 class Workshop:
@@ -143,6 +148,8 @@ class Workshop:
                    "kind": options.get("kind") or note.get("kind") or "note", "tags": note.get("tags", []),
                    "checklist": [{"id": c["id"], "text": c["text"]} for c in note.get("checklist") or []],
                    "tables": note.get("tables") or [],
+                   "refs": merge.refs_for_workshop(note, _find_note),
+                   "sources": [{"id": s["id"], "title": s.get("title") or "", "url": s["url"]} for s in note.get("sources") or [] if s.get("url")],
                    "screenshots": shots, "recordings": recs, "spoiler": bool(options.get("spoiler")),
                    "spoilerLabel": options.get("spoilerLabel", ""), "editPolicy": options.get("editPolicy", "owner"),
                    "editors": options.get("editors", []), "allowCopy": bool(options.get("allowCopy", True))}
@@ -194,6 +201,7 @@ class Workshop:
             note.pop("checklist")
         if e.get("tables"):
             note["tables"] = [{**t, "id": str(uuid.uuid4())} for t in e["tables"]]
+        note.update(merge.links_from_workshop(e, storage.load_game(appid).get("notes")))
         saved = storage.save_note(appid, note)
         self.copied("entries", e["id"])
         return saved

@@ -70,6 +70,9 @@ Your Desk server's admin can limit which Scrolls may be installed and how much s
   once they're attached (the note keeps its own copy), so your Steam screenshots don't fill up.
 - **Voice notes**: record from the Deck's microphone and play back from the note.
 - **Checklists**: tick items off straight from the note view. The list shows progress like "3/7".
+- **References and sources**: under the checklist and tables, **Add reference** points a note to your other notes and
+  guides (in any game), and **Add source** keeps the web pages it came from, each with a title you choose. Opening a
+  reference opens that note; a source opens in the browser, whose menu also has **Add this page as a source**.
 - **Spoiler** notes stay blurred until you choose **Reveal**.
 - **Folders**, including folders inside folders. Move notes between them.
 - **Pin** important notes to the top.
@@ -135,7 +138,7 @@ A dependency-free Python container (`server/`) that:
 - Keeps **version history** for every note (last 50 versions) and the last 30 snapshots of each game.
 
 ### Web editor
-Edit notes, information text, tags, folders, checklists, pin and spoiler. Upload screenshots, record or upload voice
+Edit notes, information text, tags, folders, checklists, tables, references, sources, pin and spoiler. Upload screenshots, record or upload voice
 notes, and edit the left-off pin and counters. Version history and Recently deleted are here too. Each game opens
 on its **Desk** (Game Brain, checklist, counters, recent notes, guides and more; ＋ Tomes and ✏️ Edit arrange it, saved in
 that browser) with **📝 Notes** for the full list.
@@ -199,7 +202,9 @@ A separate public container (`workshop/`) where players publish notes for everyo
 - **Browse** by game, filter by type (Guide, Tip, Boss strategy, …) and by what a post contains (📷 screenshots,
   🎙 voice recordings, ☑ checklists). Sort by most liked, newest or recently updated.
 - **Publish** any of your notes from its ☰ menu (with its screenshots, voice notes and checklist). Publishing again
-  updates the same post.
+  updates the same post. Its sources go along, and so do references to other posts and to your notes that are
+  published too (references to private notes stay private). Posts can add references and sources on the website as well;
+  copying a post brings them back, pointing to your own copy of a referenced post if you have one.
 - **Who can edit:** Only me, Me and people I choose (picked by Steam name), or Anyone signed in. Every edit is kept
   in the post's history.
 - **Allow copies:** let people copy a post into their own notes, where their copy is private (e.g. to tick off a

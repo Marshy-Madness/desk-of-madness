@@ -30,6 +30,24 @@ export interface NoteTable {
   showInView?: boolean;
 }
 
+/** A pointer from a note to another of your notes (any game) or to a Madness Workshop post. */
+export interface NoteRef {
+  id: string;
+  /** The target's title when the link was made, shown if it can't be found any more. */
+  title: string;
+  appId?: string;
+  noteId?: string;
+  /** Set instead of noteId for a Workshop post. */
+  workshopId?: string;
+}
+
+/** A web page a note got its information from. */
+export interface NoteSource {
+  id: string;
+  title: string;
+  url: string;
+}
+
 export type NoteKind =
   | "note"
   | "guide"
@@ -57,6 +75,10 @@ export interface Note {
   launchNumber: number | null;
   checklist?: ChecklistItem[];
   tables?: NoteTable[];
+  /** Guides and notes this one points to. */
+  refs?: NoteRef[];
+  /** Web pages this note's information came from. */
+  sources?: NoteSource[];
   /** Hidden behind a "reveal" until you choose to look. */
   spoiler?: boolean;
   /** What sort of note this is; "note" when missing. Guides also show in the virtual Guides folder. */
@@ -524,6 +546,8 @@ export interface WorkshopEntry extends WorkshopSummary {
   checklist: ChecklistItem[];
   /** Missing on Workshops from before tables were stored. */
   tables?: NoteTable[];
+  refs?: NoteRef[];
+  sources?: NoteSource[];
   screenshots: Screenshot[];
   recordings: Recording[];
   editPolicy: EditPolicy;

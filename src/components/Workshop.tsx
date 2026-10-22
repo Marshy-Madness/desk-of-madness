@@ -125,7 +125,7 @@ export const EntryModal: FC<{ id: string; appId: string; closeModal?: () => void
   const note: Note = {
     id: entry.id, folderId: null, title: entry.title, body: entry.body, tags: entry.tags, screenshots: entry.screenshots,
     recordings: entry.recordings, pinned: false, createdAt: entry.createdAt, updatedAt: entry.updatedAt, launchNumber: null,
-    checklist: entry.checklist, tables: entry.tables, spoiler: entry.spoiler, kind: entry.kind,
+    checklist: entry.checklist, tables: entry.tables, refs: entry.refs, sources: entry.sources, spoiler: entry.spoiler, kind: entry.kind,
   };
 
   return (

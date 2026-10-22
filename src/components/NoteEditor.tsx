@@ -4,7 +4,7 @@ import { FaCrop, FaCamera, FaMicrophone, FaMicrophoneAlt, FaStop, FaTrash, FaPar
   FaBold, FaItalic, FaUnderline, FaStrikethrough, FaHighlighter, FaCode, FaHeading, FaListUl, FaListOl, FaQuoteRight, FaMinus } from "react-icons/fa";
 import { toaster } from "@decky/api";
 import { backend } from "../api/backend";
-import { ChecklistItem, Folder, Note, NoteKind, NoteTable, Recording, Screenshot } from "../types";
+import { ChecklistItem, Folder, Note, NoteKind, NoteRef, NoteSource, NoteTable, Recording, Screenshot } from "../types";
 import { KINDS } from "../utils/kinds";
 import { formatClock, newId } from "../utils/format";
 import { useSessionTimer } from "../hooks/useSessionTimer";
@@ -20,6 +20,7 @@ import * as s from "./styles";
 import { errText } from "../utils/errors";
 import { applyFormat, Format } from "../utils/markup";
 import { keepTables, TablesEditor } from "./NoteTables";
+import { keepSources, LinksEditor } from "./NoteLinks";
 
 const FORMATS: { fmt: Format; icon: ReactNode; label: string }[] = [
   { fmt: "bold", icon: <FaBold size={14} />, label: "Bold" },
@@ -103,6 +104,8 @@ export const NoteEditor: FC<{
   const [screenshots, setScreenshots] = useState<Screenshot[]>(draft?.screenshots ?? note?.screenshots ?? initialScreenshots);
   const [checklist, setChecklist] = useState<ChecklistItem[]>(draft?.checklist ?? note?.checklist ?? []);
   const [tables, setTables] = useState<NoteTable[]>(draft?.tables ?? note?.tables ?? []);
+  const [refs, setRefs] = useState<NoteRef[]>(draft?.refs ?? note?.refs ?? []);
+  const [sources, setSources] = useState<NoteSource[]>(draft?.sources ?? note?.sources ?? []);
   const [newItem, setNewItem] = useState("");
   const [spoiler, setSpoiler] = useState(draft?.spoiler ?? note?.spoiler ?? false);
   const [kind, setKind] = useState<NoteKind>(draft?.kind ?? note?.kind ?? defaultKind ?? "note");
@@ -124,8 +127,8 @@ export const NoteEditor: FC<{
 
   // Keep the edits somewhere safe, so putting Desk of Madness away with the button combo doesn't lose them.
   useEffect(() => {
-    saveDraft({ title, body, tags, folderId, screenshots, checklist, tables, spoiler, kind, recordings, added: added.current });
-  }, [title, body, tags, folderId, screenshots, checklist, tables, spoiler, kind, recordings]);
+    saveDraft({ title, body, tags, folderId, screenshots, checklist, tables, refs, sources, spoiler, kind, recordings, added: added.current });
+  }, [title, body, tags, folderId, screenshots, checklist, tables, refs, sources, spoiler, kind, recordings]);
 
   const stopRecording = async () => {
     setRecordStart(null);
@@ -248,6 +251,8 @@ export const NoteEditor: FC<{
       launchNumber: note?.launchNumber ?? null,
       checklist: checklist.length ? checklist : undefined,
       tables: keepTables(tables).length ? keepTables(tables) : undefined,
+      refs: refs.length ? refs : undefined,
+      sources: keepSources(sources).length ? keepSources(sources) : undefined,
       spoiler,
       kind,
       source: note?.source,
@@ -265,7 +270,9 @@ export const NoteEditor: FC<{
       body !== (note?.body ?? "") ||
       added.current.length > 0 ||
       checklist.length !== (note?.checklist?.length ?? 0) ||
-      JSON.stringify(keepTables(tables)) !== JSON.stringify(note?.tables ?? []);
+      JSON.stringify(keepTables(tables)) !== JSON.stringify(note?.tables ?? []) ||
+      JSON.stringify(refs) !== JSON.stringify(note?.refs ?? []) ||
+      JSON.stringify(sources) !== JSON.stringify(note?.sources ?? []);
     if (!dirty) {
       cancel();
       return;
@@ -414,6 +421,8 @@ export const NoteEditor: FC<{
       </Focusable>
 
       <TablesEditor tables={tables} onChange={setTables} />
+
+      <LinksEditor appId={appId} noteId={note?.id} refs={refs} sources={sources} onRefs={setRefs} onSources={setSources} />
 
       <ToggleField
         label="Spoiler"
