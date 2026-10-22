@@ -48,6 +48,8 @@ export interface NoteSource {
   url: string;
 }
 
+export type PadScroll = "circle" | "swipe";
+
 export type NoteKind =
   | "note"
   | "guide"
@@ -287,6 +289,9 @@ export interface Settings {
   /** While notes or the browser are on screen, the trackpads work as on Steam's store pages: the left one
    * scrolls, the right one is a mouse (click = left click). On unless turned off. */
   trackpadMouse?: boolean;
+  /** How the left trackpad scrolls the browser: "circle" (default: draw circles, clockwise goes down the page)
+   * or "swipe" (slide the thumb, as on the touch screen). */
+  padScroll?: PadScroll;
   /** How links in notes open: "reader" (default: just the article, no ads) or "full" (the whole site). */
   browserMode?: BrowserMode;
   /** Games picked in Steam's store open in a new tab of our browser, so the store keeps your place. On unless

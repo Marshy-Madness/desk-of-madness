@@ -121,6 +121,9 @@ export const backend = {
     call<[string], { lines: string[]; source: "pinned" | "note" | "sample" }>("overlay_preview", appId),
 
   stickFeed: (on: boolean) => call<[boolean], void>("stick_feed", on),
+  padFeed: (on: boolean) => call<[boolean], void>("pad_feed", on),
+  pageWheel: (url: string, x: number, y: number, dy: number) => call<[string, number, number, number], void>("page_wheel", url, x, y, dy),
+  pageEval: <T,>(url: string, expression: string) => call<[string, string], T | null>("page_eval", url, expression),
   systemStats: () =>
     call<[], { temps: { cpu?: number; gpu?: number }; memory: { total?: number; used?: number }; battery: { percent: number; status: string } | null; load: number | null }>("system_stats"),
   storageStats: () => call<[], { label: string; path: string; total: number; free: number }[]>("storage_stats"),

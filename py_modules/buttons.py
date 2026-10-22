@@ -21,6 +21,13 @@ RESCAN_SECONDS = 5
 STICK_OFFSET = 52  # right stick X, Y (int16; Y positive = up) in a state report
 STICK_INTERVAL = 0.033  # at most ~30 updates a second to the frontend
 STICK_MOVE = 1500  # ignore smaller changes than this
+# The browser's feed: the left trackpad scrolls and the left stick picks bits of the page.
+LPAD_OFFSET = 16  # left trackpad X, Y (int16; Y positive = up)
+LSTICK_OFFSET = 48  # left stick X, Y (int16; Y positive = up)
+LPAD_TOUCH = 0x80000  # in the low button word: a thumb is on the left trackpad
+PAD_INTERVAL = 0.016  # at most ~60 updates a second to the frontend
+PAD_STEP = 96  # trackpad movement smaller than this isn't sent
+PAD_STICK_STEP = 4096  # nor stick movement smaller than this
 
 # Bits of the two button words in a state report (the same layout Steam and SDL use). Touch-only bits
 # (trackpads, sticks) are left out: they'd be "held" whenever a thumb rests there.
@@ -60,6 +67,12 @@ class Buttons:
         self.stick_on = False
         self.stick = (0, 0)
         self.stick_sent = 0.0
+        # The left trackpad and stick, only while the browser is on screen.
+        self.pad_on = False
+        self.pad = None  # what was last sent, rounded
+        self.pad_latest = None
+        self.pad_sent = 0.0
+        self.pad_timer = None
 
     def status(self) -> dict:
         return {"devices": len(self.fds), "error": self.error}
@@ -117,6 +130,11 @@ class Buttons:
         lo, hi = struct.unpack_from("<II", data, 8)
         if self.stick_on and len(data) >= STICK_OFFSET + 4:
             self._send_stick(loop, struct.unpack_from("<hh", data, STICK_OFFSET))
+        if self.pad_on and len(data) >= LSTICK_OFFSET + 4:
+            touched = bool(lo & LPAD_TOUCH)
+            pad_x, pad_y = struct.unpack_from("<hh", data, LPAD_OFFSET)
+            sx, sy = struct.unpack_from("<hh", data, LSTICK_OFFSET)
+            self._feed_pad(loop, (touched, pad_x if touched else 0, pad_y if touched else 0, sx, sy))
         state = (lo & LO_MASK, hi & HI_MASK)
         if state == self.state:
             return
@@ -136,3 +154,33 @@ class Buttons:
         self.stick = stick
         self.stick_sent = now
         loop.create_task(decky.emit("stick", stick[0], stick[1]))
+
+    def set_pad_feed(self, on: bool):
+        self.pad_on = bool(on)
+        self.pad = None
+        if self.pad_timer:
+            self.pad_timer.cancel()
+            self.pad_timer = None
+
+    def _feed_pad(self, loop, pad):
+        # Rate-limited, but the latest state always goes out in the end, so a released stick reads as released.
+        self.pad_latest = pad
+        if self.pad_timer:
+            return
+        wait = self.pad_sent + PAD_INTERVAL - loop.time()
+        if wait > 0:
+            self.pad_timer = loop.call_later(wait, self._flush_pad, loop)
+        else:
+            self._flush_pad(loop)
+
+    def _flush_pad(self, loop):
+        self.pad_timer = None
+        if not self.pad_on or self.pad_latest is None:
+            return
+        touched, x, y, sx, sy = self.pad_latest
+        rounded = (touched, round(x / PAD_STEP), round(y / PAD_STEP), round(sx / PAD_STICK_STEP), round(sy / PAD_STICK_STEP))
+        if rounded == self.pad:
+            return
+        self.pad = rounded
+        self.pad_sent = loop.time()
+        loop.create_task(decky.emit("pad", touched, x, y, sx, sy))

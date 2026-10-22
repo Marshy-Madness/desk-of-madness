@@ -23,6 +23,7 @@ import scrolls
 import system
 import playstats
 from storelinks import StoreLinks
+from pagecontrol import PageControl
 
 
 DICTATION_PATH = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "dictation.wav")
@@ -39,6 +40,7 @@ class Plugin:
     buttons = Buttons()
     keyboard = Keyboard()
     links = StoreLinks()
+    page = PageControl()
 
     # games / launches
     async def list_games(self):
@@ -437,6 +439,18 @@ class Plugin:
     async def stick_feed(self, on: bool):
         self.buttons.set_stick_feed(on)
 
+    # the browser: left trackpad scrolls, left stick picks bits of the page (buttons.py, pagecontrol.py)
+    async def pad_feed(self, on: bool):
+        self.buttons.set_pad_feed(on)
+        if not on:
+            self.page.close()
+
+    async def page_wheel(self, url: str, x: float, y: float, dy: float):
+        await self.page.wheel(url, x, y, dy)
+
+    async def page_eval(self, url: str, expression: str):
+        return await self.page.evaluate(url, expression)
+
     async def system_stats(self):
         return await asyncio.to_thread(system.stats)
 
@@ -512,6 +526,8 @@ class Plugin:
         if self.keyboard.task:
             self.keyboard.task.cancel()
         await self.links.stop()
+        self.page.close()
+        self.buttons.set_pad_feed(False)
         self.overlay.clear()
         await self.recorder.stop()
         await self.dictation.stop()

@@ -36,6 +36,8 @@ import { NOTES_ROUTE, placePath, rememberAddress } from "../state/place";
 import { emitDataChanged, updateSettings, useSettings } from "../state/notesStore";
 import { currentPath, mainWindow, replacePath, steamHistory, useChromeHeights } from "../steamWindow";
 import { useTrackpadMouse } from "../trackpads";
+import { useLeftPad } from "../leftPad";
+import { PickedBlock, blockAsText, clearBlock, clearBlockScript, stepBlock, stepBlockScript } from "../pagePick";
 import { rememberWebAddress } from "../radial/go";
 import { BrowserMode, NoteSource, ReaderPage } from "../types";
 import { errText } from "../utils/errors";
@@ -48,8 +50,9 @@ import * as s from "./styles";
 //   drawn by us so every button does something sensible.
 // - Full page: the real site in a Steam browser view, for pages the reader can't handle.
 // Buttons: B back · X reader/full page · Y menu · L1/R1 back/forward · L2/R2 page up/down · in the reader the
-// D-pad scrolls (up/down) and picks links (left/right), A follows the picked link. Trackpads work as on the
-// store: left scrolls, right is a mouse.
+// D-pad scrolls (up/down) and picks links (left/right), A follows the picked link. The left trackpad scrolls
+// (leftPad.ts) and the right one is a mouse. The left stick picks bits of the page (pagePick.ts): A saves the
+// picked one to a note, B lets it go.
 // Tabs (browserTabs.ts): games picked in the store, and links that ask for a new tab, open in a tab of their
 // own. With more than one, a row of tabs shows above the toolbar (A switches, X closes); in the full page
 // L2/R2 switch tabs too. B with nothing to go back to puts the browser away (back to the store), tabs and all.
@@ -163,6 +166,7 @@ const TabView: FC<{ tab: BrowserTab; active: boolean; strip: ReactNode }> = ({ t
   const [covered, setCovered] = useState(covers);
   const [picked, setPicked] = useState<HTMLAnchorElement | null>(null);
   const [viewState, setViewState] = useState<"none" | "ready" | "unavailable">("none");
+  const [block, setBlock] = useState<PickedBlock | null>(null);
 
   const settings = useSettings();
   const textSize = settings.readerTextSize ?? 17;
@@ -200,6 +204,8 @@ const TabView: FC<{ tab: BrowserTab; active: boolean; strip: ReactNode }> = ({ t
     rememberWebAddress(path);
     replacePath(path);
   }, [cur.url, cur.mode, active]);
+
+  useEffect(() => setBlock(null), [cur.url, cur.mode]);
 
   // ---- moving around ----
 
@@ -316,6 +322,12 @@ const TabView: FC<{ tab: BrowserTab; active: boolean; strip: ReactNode }> = ({ t
 
   const onScroll = () => {
     if (picked && !visibleLinks().includes(picked)) setPicked(null);
+    const marked = block && scroller.current?.querySelector("[data-dom-pick]");
+    if (marked) {
+      const r = marked.getBoundingClientRect();
+      const box = scroller.current!.getBoundingClientRect();
+      if (r.bottom < box.top || r.top > box.bottom) unpickBlock();
+    }
   };
 
   const pickLink = (step: 1 | -1) => {
@@ -326,6 +338,7 @@ const TabView: FC<{ tab: BrowserTab; active: boolean; strip: ReactNode }> = ({ t
   };
 
   const onReaderDirection = (evt: GamepadEvent) => {
+    if (pad.stickActive.current) return; // the left stick also sends these; it picks bits of the page instead
     const el = scroller.current;
     switch (evt.detail.button) {
       case GamepadButton.DIR_UP:
@@ -336,9 +349,11 @@ const TabView: FC<{ tab: BrowserTab; active: boolean; strip: ReactNode }> = ({ t
         scrollBy(0.45);
         return;
       case GamepadButton.DIR_LEFT:
+        unpickBlock();
         pickLink(-1);
         return;
       case GamepadButton.DIR_RIGHT:
+        unpickBlock();
         pickLink(1);
         return;
     }
@@ -363,7 +378,7 @@ const TabView: FC<{ tab: BrowserTab; active: boolean; strip: ReactNode }> = ({ t
     );
   };
 
-  const onReaderActivate = () => (picked?.dataset.href ? go(picked.dataset.href) : linksMenu());
+  const onReaderActivate = () => (block ? blockMenu() : picked?.dataset.href ? go(picked.dataset.href) : linksMenu());
 
   // Right-trackpad clicks on links (they're plain links in the page, so stop Steam from opening them itself).
   const onReaderClick = (e: React.MouseEvent) => {
@@ -499,6 +514,121 @@ const TabView: FC<{ tab: BrowserTab; active: boolean; strip: ReactNode }> = ({ t
     }
   };
 
+  // ---- picking bits of the page (left stick) ----
+
+  const stepPick = async (dir: 1 | -1) => {
+    if (curRef.current.mode === "reader") {
+      if (!scroller.current) return;
+      setPicked(null);
+      setBlock(stepBlock(scroller.current, dir));
+    } else if (view.current && covered === 0) {
+      try {
+        setBlock(await backend.pageEval<PickedBlock>(viewUrl.current, stepBlockScript(dir)));
+      } catch (e) {
+        console.warn("Desk of Madness: couldn't pick on the page", e);
+      }
+    }
+  };
+
+  const unpickBlock = () => {
+    if (!block) return;
+    setBlock(null);
+    if (curRef.current.mode === "reader") scroller.current && clearBlock(scroller.current);
+    else backend.pageEval(viewUrl.current, clearBlockScript()).catch(() => {});
+  };
+
+  const addBlockToNote = async (b: PickedBlock) => {
+    const src = linkSource();
+    if (!src) return;
+    try {
+      const game = await backend.getGame(src.appId);
+      const note = game.notes.find((n) => n.id === src.noteId);
+      if (!note) throw new Error("The note is gone");
+      const body = `${note.body.replace(/\s+$/, "")}${note.body.trim() ? "\n\n" : ""}${blockAsText(b)}`;
+      await backend.saveNote(src.appId, { ...note, body, sources: withSource(note.sources) });
+      emitDataChanged();
+      toaster.toast({ title: "Saved to the note", body: `“${src.noteTitle}”` });
+    } catch (e) {
+      toaster.toast({ title: "Couldn't save it", body: errText(e) });
+    }
+  };
+
+  const blockAsNote = async (b: PickedBlock) => {
+    const game = getRunningGame() ?? (linkSource() ? { appId: linkSource()!.appId, name: "" } : null);
+    if (!game) return;
+    try {
+      if (game.name) await backend.ensureGame(game.appId, game.name);
+      const name = (/^h[1-6]$/.test(b.kind) ? b.text : pageName()).replace(/\s+/g, " ");
+      await backend.saveNote(game.appId, {
+        id: newId(), folderId: null, title: name.slice(0, 120), body: blockAsText(b), tags: ["clip"], screenshots: [],
+        recordings: [], pinned: false, createdAt: 0, updatedAt: 0, launchNumber: null, sources: withSource(undefined),
+      });
+      emitDataChanged();
+      toaster.toast({ title: "Saved as a note", body: name.slice(0, 120) });
+    } catch (e) {
+      toaster.toast({ title: "Couldn't save the note", body: errText(e) });
+    }
+  };
+
+  const blockMenu = () => {
+    const b = block;
+    if (!b) return;
+    const src = linkSource();
+    if (!src && !getRunningGame()) {
+      toaster.toast({ title: "Nowhere to save it", body: "Open the browser from a note, or start a game, to save bits of pages." });
+      return;
+    }
+    showContextMenu(
+      <Menu label={(b.kind === "img" ? b.text || "Picture" : b.text).slice(0, 60)}>
+        <Cover />
+        {src && <MenuItem onSelected={() => addBlockToNote(b)}>Add to “{src.noteTitle}”</MenuItem>}
+        <MenuItem onSelected={() => blockAsNote(b)}>Save as a new note</MenuItem>
+        {b.link && <MenuItem onSelected={() => go(b.link!)}>Open its link · {host(b.link)}</MenuItem>}
+      </Menu>
+    );
+  };
+
+  // ---- left trackpad ----
+
+  const wheel = useRef({ owed: 0, sending: false });
+  const sendWheel = () => {
+    const w = wheel.current;
+    const r = viewHost.current?.getBoundingClientRect();
+    if (w.sending || !w.owed || !r) return;
+    const dy = Math.round(w.owed);
+    w.owed -= dy;
+    if (!dy) return;
+    w.sending = true;
+    backend
+      .pageWheel(viewUrl.current, r.width / 2, r.height / 2, dy)
+      .catch(() => (w.owed = 0))
+      .finally(() => {
+        w.sending = false;
+        sendWheel();
+      });
+  };
+
+  const pad = useLeftPad(active, {
+    scroll: (px) => {
+      if (curRef.current.mode === "reader") scroller.current?.scrollBy({ top: px });
+      else if (view.current && covered === 0) {
+        wheel.current.owed += px;
+        sendWheel();
+      }
+    },
+    height: () => (curRef.current.mode === "reader" ? scroller.current?.clientHeight : viewHost.current?.clientHeight) || 600,
+    step: stepPick,
+  });
+
+  // Steam's trackpad mode may turn the trackpad into a mouse wheel as well; it mustn't scroll twice.
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => pad.touched.current && e.preventDefault();
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [cur.mode, active]);
+
   const newNote = async () => {
     const game = getRunningGame() ?? (linkSource() ? { appId: linkSource()!.appId, name: "" } : null);
     if (!game) return;
@@ -582,8 +712,8 @@ const TabView: FC<{ tab: BrowserTab; active: boolean; strip: ReactNode }> = ({ t
     <Focusable
       className="dom-root"
       style={{ position: "absolute", inset: 0, paddingTop: `${header}px`, paddingBottom: `${footer}px`, display: "flex", flexDirection: "column", boxSizing: "border-box" }}
-      onCancelButton={() => goBack()}
-      onCancelActionDescription={canBack ? "Back" : "Close"}
+      onCancelButton={() => (block ? unpickBlock() : goBack())}
+      onCancelActionDescription={block ? "Let go" : canBack ? "Back" : "Close"}
       onSecondaryButton={toggleMode}
       onSecondaryActionDescription={reader ? "Full page" : "Reader"}
       onOptionsButton={menu}
@@ -617,7 +747,7 @@ const TabView: FC<{ tab: BrowserTab; active: boolean; strip: ReactNode }> = ({ t
         <Focusable
           ref={scroller}
           onActivate={onReaderActivate}
-          onOKActionDescription={picked ? "Open link" : "Links"}
+          onOKActionDescription={block ? "Save to a note" : picked ? "Open link" : "Links"}
           onGamepadDirection={onReaderDirection as any}
           onScroll={onScroll}
           onClick={onReaderClick}
@@ -639,8 +769,9 @@ const TabView: FC<{ tab: BrowserTab; active: boolean; strip: ReactNode }> = ({ t
         </Focusable>
       ) : (
         <Focusable
-          onActivate={() => view.current?.SetFocus(true)}
-          onOKActionDescription="Use the page"
+          onActivate={() => (block ? blockMenu() : view.current?.SetFocus(true))}
+          onOKActionDescription={block ? "Save to a note" : "Use the page"}
+          onGamepadDirection={(() => (pad.stickActive.current ? undefined : false)) as any}
           noFocusRing
           preferredFocus
           style={{ flex: "1 1 auto", display: "flex" }}

@@ -2,7 +2,7 @@ import { FC, useEffect, useState } from "react";
 import { ButtonItem, DialogButton, DropdownItem, Focusable, PanelSectionRow, TextField, ToggleField } from "@decky/ui";
 import { backend } from "../api/backend";
 import { emitDataChanged, loadSettings, updateSettings, useSettings } from "../state/notesStore";
-import { BackupStatus, BringForward, BrowserMode, DictateTarget, NotesIn, ReaderCacheSettings, VoiceFallback } from "../types";
+import { BackupStatus, BringForward, BrowserMode, DictateTarget, PadScroll, NotesIn, ReaderCacheSettings, VoiceFallback } from "../types";
 import { ComboRow, VoiceCommandList } from "./ComboSettings";
 import { refreshSpeech, useSpeechAllowed } from "../state/speech";
 import { LinkPanel } from "./Workshop";
@@ -594,6 +594,18 @@ export const SettingsView: FC = () => {
               description="On the notes page, in notes and in the browser: the left trackpad scrolls and the right one is a mouse (click it to click). Takes effect the next time a page opens."
               checked={settings.trackpadMouse ?? true}
               onChange={(v) => updateSettings({ trackpadMouse: v })}
+            />
+          </PanelSectionRow>
+          <PanelSectionRow>
+            <DropdownItem
+              label="Browser scrolling (left trackpad)"
+              description="Circles: draw circles with your thumb, clockwise to go down the page. Swipe: slide it up and down, as on the touch screen."
+              rgOptions={[
+                { data: "circle", label: "Circles" },
+                { data: "swipe", label: "Swipe" },
+              ]}
+              selectedOption={settings.padScroll ?? "circle"}
+              onChange={(o) => updateSettings({ padScroll: o.data as PadScroll })}
             />
           </PanelSectionRow>
         </>
