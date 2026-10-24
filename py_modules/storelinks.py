@@ -3,8 +3,10 @@
 Steam's pages can be reached through Chromium's remote debugging port (Decky Loader turns it on). For every
 store page we add a small script that catches clicks on links to a game (/app/, /sub/, /bundle/) and hands
 the address to us through a CDP binding instead of following it; the frontend then opens it in a new tab
-of our browser. The script only catches clicks while the frontend says so (the store or our browser is on
-screen and the setting is on); otherwise clicks behave as usual.
+of our browser. Sale pages like Next Fest are built from Steam's gamepad-navigation components, which go to a
+game by script rather than by a link click, so we also stop the page itself loading a different game's page
+(CDP Fetch, at the request) and open that one in a tab too. Both only act while the frontend says so (the
+store or our browser is on screen and the setting is on); otherwise everything behaves as usual.
 
 Only the standard library is used (newer Decky Loader builds leave some of it, and aiohttp, out of reach),
 so this has its own tiny WebSocket client: text frames, ping/pong and close, which is all CDP needs.
@@ -14,6 +16,7 @@ import asyncio
 import base64
 import json
 import os
+import re
 import struct
 import urllib.request
 
@@ -24,9 +27,15 @@ DEBUG_PORT = 8080
 SCAN_SECONDS = 2
 STORE_PREFIX = "https://store.steampowered.com/"
 BINDING = "__deskOfMadnessOpen"
+ITEM = re.compile(r"^https?://store\.steampowered\.com/(app|sub|bundle)/(\d+)", re.I)
+# Only a page loading a game's own page is held up; everything else goes straight through.
+FETCH_PATTERNS = [
+    {"urlPattern": f"{STORE_PREFIX}{kind}/*", "resourceType": "Document", "requestStage": "Request"}
+    for kind in ("app", "sub", "bundle")
+]
 
 # Runs in each store page (again after every navigation). Clicks on a link to a different game than the
-# page's own are stopped and passed to the binding.
+# page's own, and window.open calls for one, are stopped and passed to the binding.
 PAGE_SCRIPT = r"""
 (() => {
   if (window.__domStoreLinks) return;
@@ -45,8 +54,23 @@ PAGE_SCRIPT = r"""
     e.stopImmediatePropagation();
     window.%s(JSON.stringify({ url: a.href, from: location.href }));
   }, true);
+  const open = window.open;
+  window.open = function (u) {
+    const url = u ? new URL(String(u), location.href).href : "";
+    const target = item(url);
+    if (window.__domStoreLinksOn === true && target && target !== item(location.href) && typeof window.%s === "function") {
+      window.%s(JSON.stringify({ url, from: location.href }));
+      return null;
+    }
+    return open.apply(this, arguments);
+  };
 })();
-""" % (BINDING, BINDING)
+""" % (BINDING, BINDING, BINDING, BINDING)
+
+
+def _item(url: str):
+    m = ITEM.match(url or "")
+    return f"{m.group(1).lower()}/{m.group(2)}" if m else None
 
 
 def _flag_script(on: bool) -> str:
@@ -164,17 +188,22 @@ class StoreLinks:
                 targets = []
             for t in targets:
                 tid = t.get("id")
-                if t.get("type") == "page" and str(t.get("url", "")).startswith(STORE_PREFIX) and tid and tid not in self._pages:
-                    self._pages[tid] = (None, asyncio.get_event_loop().create_task(self._watch(tid)))
+                url = str(t.get("url", ""))
+                if t.get("type") == "page" and url.startswith(STORE_PREFIX) and tid and tid not in self._pages:
+                    self._pages[tid] = (None, asyncio.get_event_loop().create_task(self._watch(tid, url)))
             await asyncio.sleep(SCAN_SECONDS)
 
-    async def _watch(self, tid: str):
+    async def _watch(self, tid: str, url: str):
         sock = None
+        here = url  # the page's own address, to tell a different game from its own (reloads, redirects)
+        main_frame = tid  # a page target's main frame has the target's id
         try:
             sock = await _Socket.connect(f"/devtools/page/{tid}")
             self._pages[tid] = (sock, self._pages[tid][1])
             await self._call(sock, "Runtime.addBinding", {"name": BINDING})
             await self._call(sock, "Runtime.enable", {})  # reports the page's current context, then each new one
+            await self._call(sock, "Page.enable", {})
+            await self._call(sock, "Fetch.enable", {"patterns": FETCH_PATTERNS})
             while True:
                 msg = json.loads(await sock.recv())
                 method = msg.get("method")
@@ -186,6 +215,21 @@ class StoreLinks:
                             "expression": _flag_script(self.on) + PAGE_SCRIPT,
                             "contextId": ctx.get("id"),
                         })
+                elif method == "Page.frameNavigated":
+                    frame = params.get("frame") or {}
+                    if not frame.get("parentId"):
+                        main_frame = frame.get("id") or main_frame
+                        here = str(frame.get("url", here))
+                elif method == "Fetch.requestPaused":
+                    rid = params.get("requestId")
+                    to = str((params.get("request") or {}).get("url", ""))
+                    if (self.on and params.get("frameId") == main_frame and here.startswith(STORE_PREFIX)
+                            and _item(to) and _item(to) != _item(here)):
+                        # Aborting a page load leaves the page that was showing as it was.
+                        await self._call(sock, "Fetch.failRequest", {"requestId": rid, "errorReason": "Aborted"})
+                        await decky.emit("store_link", to, here)
+                    else:
+                        await self._call(sock, "Fetch.continueRequest", {"requestId": rid})
                 elif method == "Runtime.bindingCalled" and params.get("name") == BINDING:
                     try:
                         picked = json.loads(params.get("payload") or "{}")

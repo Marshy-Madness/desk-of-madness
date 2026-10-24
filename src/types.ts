@@ -273,7 +273,7 @@ export interface Settings {
   notesIn?: NotesIn;
   /** In a game, how Steam's UI is brought in front before our pages show. Unset = the Steam menu. */
   bringForward?: BringForward;
-  /** Add "Desk of Madness" to the main Steam-button menu. */
+  /** Add "Desk of Madness" to the main Steam-button menu. On unless turned off. */
   mainMenuEntry?: boolean;
   /** Give Desk of Madness its own Quick Access tab, next to Decky's. */
   qamTab?: boolean;

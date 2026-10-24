@@ -349,6 +349,9 @@ function watchSteamKeys(onChange: (down: Set<string>) => void): () => void {
 
 const MENU_KEY = "desk-of-madness";
 
+/** On unless turned off in Settings. */
+const mainMenuOn = () => getSettings().mainMenuEntry !== false;
+
 const hasSettings = (list: unknown[]) => list.some((e) => isValidElement(e) && e.key === "settings");
 
 /** Returns the menu's item list with our entry (and the Scrolls' changes), or null if it's not the main menu or nothing changed. */
@@ -361,7 +364,7 @@ function withNotesItem(items: unknown): MenuItem[] | null {
   const makeItem = (props: MenuItemProps) =>
     cloneElement(template, { routeState: undefined, active: "if-within-route", ...props } as any) as MenuItem;
   let changed = false;
-  if (getSettings().mainMenuEntry && !list.some((e) => e.key === MENU_KEY)) {
+  if (mainMenuOn() && !list.some((e) => e.key === MENU_KEY)) {
     // At the very top, above the running game, so it's the first thing under the Steam button.
     const route = lastPlaceAddress() ?? NOTES_ROUTE;
     list = [makeItem({ key: MENU_KEY, route, label: "Desk of Madness", icon: <FaRegStickyNote /> }), ...list];
@@ -383,39 +386,58 @@ function withNotesItem(items: unknown): MenuItem[] | null {
 
 /**
  * Steam builds the main menu's items inside its own code, then passes them as children to a Focusable with
- * role "menu". Newer Steam makes Focusable a plain function we can't patch in place, so we watch for it at
- * React.createElement instead and add our item there, copied from the Downloads entry so it looks and
- * behaves the same. We don't compare the type with @decky/ui's Focusable: that lookup can land on a
- * different copy than the menu uses, which silently hid the entry. withNotesItem checks the items instead.
+ * role "menu". Newer Steam makes Focusable a plain function we can't patch in place, so we watch for it where
+ * elements are made instead and add our item there, copied from the Downloads entry so it looks and behaves
+ * the same. Depending on the build Steam makes elements with React.createElement (children as extra arguments)
+ * or the JSX runtime's jsx/jsxs (children in props, the key as the third argument), so all three are watched.
+ * We don't compare the type with @decky/ui's Focusable: that lookup can land on a different copy than the menu
+ * uses, which silently hid the entry. withNotesItem checks the items instead.
  */
 function patchMainMenu(): (() => void) | null {
-  const react = (window as any).SP_REACT;
-  if (typeof react?.createElement !== "function") return null;
-  const original = react.createElement;
-  const patched = function (this: unknown, type: unknown, props: any, ...children: unknown[]) {
-    if (props?.role === "menu" && typeof type !== "string" && (getSettings().mainMenuEntry || menuHooks.size)) {
-      try {
-        // Children come either as extra arguments or in props.children, possibly one array deep.
-        if (children.length) {
-          children = children.map((c) => withNotesItem(c) ?? c);
-        } else if (props.children) {
-          const kids = props.children;
-          const direct = withNotesItem(kids);
-          props = {
-            ...props,
-            children: direct ?? (Array.isArray(kids) ? kids.map((c: unknown) => withNotesItem(c) ?? c) : kids),
-          };
-        }
-      } catch (e) {
-        console.warn("Desk of Madness: couldn't add the Steam menu entry", e);
+  const w = window as any;
+  const withItem = (type: unknown, props: any, children: unknown[]) => {
+    if (props?.role !== "menu" || typeof type === "string" || !(mainMenuOn() || menuHooks.size)) return { props, children };
+    try {
+      // Children come either as extra arguments or in props.children, possibly one array deep.
+      if (children.length) return { props, children: children.map((c) => withNotesItem(c) ?? c) };
+      if (props.children) {
+        const kids = props.children;
+        const direct = withNotesItem(kids);
+        const next = direct ?? (Array.isArray(kids) ? kids.map((c: unknown) => withNotesItem(c) ?? c) : kids);
+        return { props: { ...props, children: next }, children };
       }
+    } catch (e) {
+      console.warn("Desk of Madness: couldn't add the Steam menu entry", e);
     }
-    return original.call(this, type, props, ...children);
+    return { props, children };
   };
-  react.createElement = patched;
-  return () => {
-    if (react.createElement === patched) react.createElement = original;
+
+  const undo: (() => void)[] = [];
+  const patch = (obj: any, name: string, childrenAsArgs: boolean) => {
+    const original = obj?.[name];
+    if (typeof original !== "function") return;
+    const patched = function (this: unknown, type: unknown, props: any, ...rest: unknown[]) {
+      if (childrenAsArgs) {
+        const r = withItem(type, props, rest);
+        return original.call(this, type, r.props, ...r.children);
+      }
+      return original.call(this, type, withItem(type, props, []).props, ...rest);
+    };
+    try {
+      obj[name] = patched;
+    } catch (e) {
+      console.warn(`Desk of Madness: couldn't watch ${name} for the Steam menu`, e);
+      return;
+    }
+    undo.push(() => {
+      if (obj[name] === patched) obj[name] = original;
+    });
   };
+  patch(w.SP_REACT, "createElement", true);
+  patch(w.SP_JSX, "jsx", false);
+  patch(w.SP_JSX, "jsxs", false);
+  if (!undo.length) return null;
+  return () => undo.forEach((u) => u());
 }
 
 // ---- own Quick Access tab ----

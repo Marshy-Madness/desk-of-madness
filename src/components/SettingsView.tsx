@@ -171,7 +171,7 @@ export const SettingsView: FC = () => {
             <ToggleField
               label="Show in the Steam menu"
               description="Add Desk of Madness to the main Steam-button menu. It opens the full-screen notes page."
-              checked={settings.mainMenuEntry ?? false}
+              checked={settings.mainMenuEntry ?? true}
               onChange={(v) => updateSettings({ mainMenuEntry: v })}
             />
           </PanelSectionRow>
@@ -311,7 +311,7 @@ export const SettingsView: FC = () => {
           <PanelSectionRow>
             <ToggleField
               label="Open store games in the browser"
-              description="Picking a game in Steam's store (a search, a tag, a list) opens it in a new browser tab, so the store keeps your place. B goes back to the store."
+              description="Picking a game in Steam's store (a search, a tag, a list, a sale or Next Fest) opens it in a new browser tab, so the store keeps your place. B goes back to the store."
               checked={settings.storeLinksInBrowser ?? true}
               onChange={(v) => updateSettings({ storeLinksInBrowser: v })}
             />
