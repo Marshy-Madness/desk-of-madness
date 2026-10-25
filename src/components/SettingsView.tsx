@@ -14,6 +14,7 @@ import { formatDateTime } from "../utils/format";
 import { setSteamScreenshotPopup, steamScreenshotPopupOn } from "../utils/steamScreenshots";
 import { errText } from "../utils/errors";
 import { RadialItemsEditor } from "../radial/RadialSettings";
+import { OverlayTestRow } from "../radial/OverlayTestRow";
 import { TomeList } from "../tomes/TomePicker";
 import * as s from "./styles";
 
@@ -485,6 +486,9 @@ export const SettingsView: FC = () => {
               selectedOption={settings.bringForward ?? "menu"}
               onChange={(o) => updateSettings({ bringForward: o.data })}
             />
+          </PanelSectionRow>
+          <PanelSectionRow>
+            <OverlayTestRow />
           </PanelSectionRow>
 
           <Heading>Straight to a page</Heading>
