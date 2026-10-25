@@ -3,14 +3,16 @@ import { achievementsCombo, commandsCombo, deskCombo, goNotes, notesCombo, quick
 import { RadialPage } from "./radial/RadialPage";
 import { addEventListener, removeEventListener, routerHook } from "@decky/api";
 import { afterPatch, ErrorBoundary, findModuleExport, Patch, showModal } from "@decky/ui";
-import { FaRegStickyNote } from "react-icons/fa";
+import { FaGlobe, FaRegStickyNote, FaTimesCircle } from "react-icons/fa";
 import { NotesPage } from "./components/NotesPage";
 import { BrowserPage } from "./components/BrowserPage";
 import { QuickAccessPanel } from "./components/QuickAccessPanel";
 import { getSettings } from "./state/notesStore";
 import { dictationBusy, dictationChordEnabled, stopAnywhereDictation, toggleAnywhereDictation } from "./dictation";
 import { NOTES_ROUTE, WEB_ROUTE, reportButtons } from "./opening";
-import { ACHIEVEMENTS_ROUTE, COMMANDS_ROUTE, lastPlaceAddress, RADIAL_ROUTE } from "./state/place";
+import { ACHIEVEMENTS_ROUTE, COMMANDS_ROUTE, lastPlaceAddress, RADIAL_ROUTE, WEB_CLOSE_ROUTE } from "./state/place";
+import { getTabs } from "./browserTabs";
+import { BrowserClosePage } from "./components/BrowserClosePage";
 import { AchievementsPage } from "./achievements/AchievementsPage";
 import { CommandsPage } from "./commands/CommandsPage";
 import { stopAllTimers } from "./commands/timers";
@@ -269,11 +271,19 @@ function startChordWatch(): () => void {
     });
   }
 
+  const stateButtons = new Map<number, [number, number]>();
   const legacy = (window as any).SteamClient?.Input?.RegisterForControllerStateChanges?.(
     (changes: { unControllerIndex: number; ulButtons: number; ulUpperButtons: number }[]) => {
       for (const c of changes) {
         const lo = Number(c.ulButtons) || 0;
         const hi = Number(c.ulUpperButtons) || 0;
+        // This fires for every stick, trackpad and gyro movement too; only button changes need the combo check.
+        const was = stateButtons.get(c.unControllerIndex);
+        if (was && was[0] === lo && was[1] === hi) {
+          lastSeen.set(`state${c.unControllerIndex}`, Date.now());
+          continue;
+        }
+        stateButtons.set(c.unControllerIndex, [lo, hi]);
         const down = new Set<Button>([
           ...LO_BITS.filter(([b]) => lo & b).map(([, n]) => n),
           ...HI_BITS.filter(([b]) => hi & b).map(([, n]) => n),
@@ -349,8 +359,12 @@ function watchSteamKeys(onChange: (down: Set<string>) => void): () => void {
 
 const MENU_KEY = "desk-of-madness";
 
+const BROWSER_KEY = "desk-of-madness-browser";
+const BROWSER_CLOSE_KEY = "desk-of-madness-browser-close";
+
 /** On unless turned off in Settings. */
 const mainMenuOn = () => getSettings().mainMenuEntry !== false;
+const browserMenuOn = () => getSettings().browserMenuEntry !== false;
 
 const hasSettings = (list: unknown[]) => list.some((e) => isValidElement(e) && e.key === "settings");
 
@@ -368,6 +382,18 @@ function withNotesItem(items: unknown): MenuItem[] | null {
     // At the very top, above the running game, so it's the first thing under the Steam button.
     const route = lastPlaceAddress() ?? NOTES_ROUTE;
     list = [makeItem({ key: MENU_KEY, route, label: "Desk of Madness", icon: <FaRegStickyNote /> }), ...list];
+    changed = true;
+  }
+  if (browserMenuOn() && !list.some((e) => e.key === BROWSER_KEY)) {
+    // Under our own entry (or at the top): the browser comes back on the tabs you left open, and while any
+    // are open there's a way to close it from here too.
+    const at = list.findIndex((e) => e.key === MENU_KEY) + 1;
+    const open = getTabs().length;
+    const items = [
+      makeItem({ key: BROWSER_KEY, route: WEB_ROUTE, label: open ? `Browser (${open} ${open === 1 ? "tab" : "tabs"})` : "Browser", icon: <FaGlobe /> }),
+      ...(open ? [makeItem({ key: BROWSER_CLOSE_KEY, route: WEB_CLOSE_ROUTE, label: "Close browser", icon: <FaTimesCircle /> })] : []),
+    ];
+    list = [...list.slice(0, at), ...items, ...list.slice(at)];
     changed = true;
   }
   for (const hook of menuHooks) {
@@ -396,7 +422,7 @@ function withNotesItem(items: unknown): MenuItem[] | null {
 function patchMainMenu(): (() => void) | null {
   const w = window as any;
   const withItem = (type: unknown, props: any, children: unknown[]) => {
-    if (props?.role !== "menu" || typeof type === "string" || !(mainMenuOn() || menuHooks.size)) return { props, children };
+    if (typeof type === "string" || !(mainMenuOn() || browserMenuOn() || menuHooks.size)) return { props, children };
     try {
       // Children come either as extra arguments or in props.children, possibly one array deep.
       if (children.length) return { props, children: children.map((c) => withNotesItem(c) ?? c) };
@@ -416,7 +442,13 @@ function patchMainMenu(): (() => void) | null {
   const patch = (obj: any, name: string, childrenAsArgs: boolean) => {
     const original = obj?.[name];
     if (typeof original !== "function") return;
-    const patched = function (this: unknown, type: unknown, props: any, ...rest: unknown[]) {
+    // Every element Steam's UI makes goes through here, so anything that isn't a menu goes straight on,
+    // without copying its arguments.
+    const patched = function (this: unknown, type: unknown, props: any) {
+      // eslint-disable-next-line prefer-rest-params
+      if (props?.role !== "menu") return original.apply(this, arguments as any);
+      // eslint-disable-next-line prefer-rest-params
+      const rest: unknown[] = Array.prototype.slice.call(arguments, 2);
       if (childrenAsArgs) {
         const r = withItem(type, props, rest);
         return original.call(this, type, r.props, ...r.children);
@@ -487,6 +519,7 @@ export function startIntegrations(): () => void {
   // Not exact: the rest of the address is where you are (state/place.ts).
   routerHook.addRoute(NOTES_ROUTE, NotesPage);
   routerHook.addRoute(WEB_ROUTE, BrowserPage, { exact: true });
+  routerHook.addRoute(WEB_CLOSE_ROUTE, BrowserClosePage, { exact: true });
   routerHook.addRoute(RADIAL_ROUTE, RadialPage, { exact: true });
   routerHook.addRoute(COMMANDS_ROUTE, CommandsPage, { exact: true });
   routerHook.addRoute(ACHIEVEMENTS_ROUTE, AchievementsPage, { exact: true });
@@ -500,6 +533,7 @@ export function startIntegrations(): () => void {
     unpatchMenu?.();
     routerHook.removeRoute(NOTES_ROUTE);
     routerHook.removeRoute(WEB_ROUTE);
+    routerHook.removeRoute(WEB_CLOSE_ROUTE);
     routerHook.removeRoute(RADIAL_ROUTE);
     routerHook.removeRoute(COMMANDS_ROUTE);
     routerHook.removeRoute(ACHIEVEMENTS_ROUTE);

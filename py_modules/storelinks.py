@@ -162,12 +162,30 @@ class StoreLinks:
         self._warned = False
 
     async def set_active(self, on: bool):
+        """Only while it's on (the store or our browser on screen) do we look for store pages and stay attached
+        to them; the rest of the time Steam's pages run without us, and nothing is polled."""
         self.on = bool(on)
-        if self.on and not self.task:
-            self.task = asyncio.get_event_loop().create_task(self._scan_loop())
-        for sock, _ in list(self._pages.values()):
-            await self._call(sock, "Runtime.evaluate", {"expression": _flag_script(self.on)})
+        if self.on:
+            if not self.task:
+                self.task = asyncio.get_event_loop().create_task(self._scan_loop())
+            for sock, _ in list(self._pages.values()):
+                if sock:
+                    await self._call(sock, "Runtime.evaluate", {"expression": _flag_script(True)})
+        else:
+            await self._detach()
         return {"on": self.on, "pages": len(self._pages)}
+
+    async def _detach(self):
+        if self.task:
+            self.task.cancel()
+            self.task = None
+        for sock, task in list(self._pages.values()):
+            if sock:
+                # The script stays in the page; it must stop catching clicks. Attaching again re-adds the binding.
+                await self._call(sock, "Runtime.evaluate", {"expression": _flag_script(False)})
+                sock.close()
+            task.cancel()
+        self._pages.clear()
 
     async def _call(self, sock: _Socket, method: str, params: dict):
         self._ids += 1
@@ -199,7 +217,10 @@ class StoreLinks:
         main_frame = tid  # a page target's main frame has the target's id
         try:
             sock = await _Socket.connect(f"/devtools/page/{tid}")
-            self._pages[tid] = (sock, self._pages[tid][1])
+            mine = self._pages.get(tid)
+            if not mine or mine[1] is not asyncio.current_task():
+                return  # detached while connecting
+            self._pages[tid] = (sock, mine[1])
             await self._call(sock, "Runtime.addBinding", {"name": BINDING})
             await self._call(sock, "Runtime.enable", {})  # reports the page's current context, then each new one
             await self._call(sock, "Page.enable", {})
@@ -247,15 +268,9 @@ class StoreLinks:
         finally:
             if sock:
                 sock.close()
-            self._pages.pop(tid, None)
+            mine = self._pages.get(tid)
+            if mine and mine[1] is asyncio.current_task():  # not a newer watch of the same page
+                self._pages.pop(tid, None)
 
     async def stop(self):
-        await self.set_active(False)  # the pages keep the script; it must stop catching clicks
-        if self.task:
-            self.task.cancel()
-            self.task = None
-        for sock, task in list(self._pages.values()):
-            if sock:
-                sock.close()
-            task.cancel()
-        self._pages.clear()
+        await self.set_active(False)

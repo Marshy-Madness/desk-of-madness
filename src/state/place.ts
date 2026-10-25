@@ -8,6 +8,8 @@ import { replacePath } from "../steamWindow";
 
 export const NOTES_ROUTE = "/desk-of-madness";
 export const WEB_ROUTE = "/desk-of-madness-web";
+/** Closes the browser and its tabs, then goes back (the Steam menu's "Close browser"). */
+export const WEB_CLOSE_ROUTE = "/desk-of-madness-web-close";
 /** The radial menu (radial/RadialPage.tsx). */
 export const RADIAL_ROUTE = "/desk-of-madness-radial";
 /** Desk Commands, the command palette (commands/CommandsPage.tsx). */

@@ -67,6 +67,14 @@ export function closeTab(id: string): boolean {
   return tabs.length > 0;
 }
 
+/** Closes every tab: the browser starts fresh next time. */
+export function closeAllTabs() {
+  if (!tabs.length) return;
+  tabs = [];
+  activeId = null;
+  changed();
+}
+
 export function closeOtherTabs(id: string) {
   tabs = tabs.filter((t) => t.id === id);
   activeId = tabs[0]?.id ?? null;

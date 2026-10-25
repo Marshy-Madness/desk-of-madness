@@ -177,6 +177,14 @@ export const SettingsView: FC = () => {
           </PanelSectionRow>
           <PanelSectionRow>
             <ToggleField
+              label="Browser in the Steam menu"
+              description="Add Browser to the main Steam-button menu. It brings the browser back on the tabs you left open; while any are open, Close browser shuts them all."
+              checked={settings.browserMenuEntry ?? true}
+              onChange={(v) => updateSettings({ browserMenuEntry: v })}
+            />
+          </PanelSectionRow>
+          <PanelSectionRow>
+            <ToggleField
               label="Own Quick Access tab"
               description="Give Desk of Madness its own tab in the Quick Access menu, so you don't have to go through Decky. Takes effect the next time you open the menu."
               checked={settings.qamTab ?? false}

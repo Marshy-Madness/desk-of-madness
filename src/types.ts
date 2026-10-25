@@ -275,6 +275,8 @@ export interface Settings {
   bringForward?: BringForward;
   /** Add "Desk of Madness" to the main Steam-button menu. On unless turned off. */
   mainMenuEntry?: boolean;
+  /** Add "Browser" (and "Close browser" while tabs are open) to the main Steam-button menu. On unless turned off. */
+  browserMenuEntry?: boolean;
   /** Give Desk of Madness its own Quick Access tab, next to Decky's. */
   qamTab?: boolean;
   /** The dictate combo starts and stops speech to text anywhere. Off unless turned on. */
