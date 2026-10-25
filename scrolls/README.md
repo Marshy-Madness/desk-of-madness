@@ -71,8 +71,8 @@ Build them all with `node scrolls/build.mjs` (or `node scrolls/build.mjs game-ne
 The official Scrolls:
 - **🧩 Plugin Shelf** (`plugin-shelf`): pin Decky plugins as their own Quick Access tab or in the Steam menu, and group
   Decky's list into folders. It patches Decky's own UI, so it starts off and turns itself off if Decky's parts move.
-- **📰 Game News** (`game-news`): a News section on games' library pages (Steam's news and patch notes plus new
-  Workshop books, hideable per game) and a Game News Tome.
+- **📰 Game News** (`game-news`): a News tab on games' library pages, next to Activity (Steam's news and patch notes
+  plus new Workshop books, hideable per game; or a section under Play), and a Game News Tome.
 - **📖 Wiki** (`wiki`): the game's wiki (found by name on wiki.gg and Fandom, or any MediaWiki address; Wikipedia
   otherwise) read through the server's reader view, searchable, with wiki links opening in place. Select mode picks
   headings (whole sections), paragraphs, lists and tables and saves them as plain text to a new or existing note,

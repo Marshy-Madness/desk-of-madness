@@ -1,24 +1,73 @@
-import { CSSProperties, FC, useEffect, useState } from "react";
+import { Context, ComponentType, CSSProperties, FC, ReactElement, ReactNode, useContext, useEffect, useState } from "react";
 import { afterPatch, appDetailsClasses, createReactTreePatcher, DialogButton, ErrorBoundary, findInReactTree, Focusable, useParams } from "@decky/ui";
 import type { DeskScrollApi } from "../../src/scrolls/api";
 import type { TomeProps } from "../../src/tomes/registry";
 import type { SteamNewsItem, WorkshopSummary } from "../../src/types";
 
-// 📰 Game News: Steam's news for a game (plus new Workshop books for it) on its library page and as a Tome.
+// 📰 Game News: Steam's news for a game (plus new Workshop books for it) on its library page (a News tab, or a
+// section under Play) and as a Tome.
 
 interface NewsSettings {
-  /** The section on library pages. On unless turned off. */
+  /** News on library pages. On unless turned off. */
   libraryPage?: boolean;
+  /** As a News tab next to Steam's own (Activity, Your Stuff…) instead of a section under Play. On unless turned off. */
+  asTab?: boolean;
   /** New Workshop books next to the news. On unless turned off. */
   workshop?: boolean;
-  /** How many news posts to show; unset = 3. */
+  /** How many news posts to show; unset = 3 (8 in the News tab). */
   count?: number;
   /** App IDs the library section is hidden for. */
   hidden?: string[];
 }
 
 const SECTION_KEY = "desk-of-madness-game-news";
+const TAB_ID = "DeskOfMadnessNews";
+/** Steam's id for the game page's Activity tab; the News tab goes right after it. */
+const ACTIVITY_TAB_ID = "WhatsNew";
 const WORKSHOP_DAYS = 30;
+
+type Tab = { id: string; title: string; content: ReactElement };
+type TabsComponent = ComponentType<any>;
+
+// The game page's tabs (Activity, Your Stuff, Community…) come from a component the page reads from a React
+// context. A class between the page and the tabs redefines its render after the first call, so a tree patch
+// through it only sees the first render; instead the page's output is wrapped in a nearer Provider of the same
+// context, holding the original tabs component with its tab list patched. (The way Spool's Decky plugin does it.)
+//
+// The context is recognised by its default value, a fallback tabs component taking `setSections` and `concise`.
+// Its module loads after Decky indexes Steam's modules, so this searches webpack's module factories directly.
+// The default is read from `_currentValue2`: while the page renders, React DOM has the Provider's value in
+// `_currentValue`, and Steam has no secondary renderer to touch `_currentValue2`.
+function isTabsContext(e: any): e is Context<TabsComponent> {
+  const fallback = e?._currentValue2;
+  return (
+    e?.$$typeof === Symbol.for("react.context") &&
+    typeof fallback === "function" &&
+    /setSections/.test(`${fallback}`) &&
+    /concise/.test(`${fallback}`)
+  );
+}
+
+/** Looked up once, on the first game page: undefined = not yet, null = not there (Steam changed). */
+let tabsContext: Context<TabsComponent> | null | undefined;
+function findTabsContext(log: (...a: unknown[]) => void): Context<TabsComponent> | null {
+  if (tabsContext !== undefined) return tabsContext;
+  tabsContext = null;
+  try {
+    let req: any;
+    (window as any).webpackChunksteamui.push([[Symbol("desk-game-news")], {}, (r: any) => (req = r)]);
+    for (const id of Object.keys(req?.m ?? {})) {
+      const src = `${req.m[id]}`;
+      if (!src.includes("createContext(") || !src.includes("concise") || !src.includes("setSections")) continue;
+      const found = Object.values(req(id) ?? {}).find(isTabsContext);
+      if (found) return (tabsContext = found);
+    }
+    log("game page tabs not found; showing News as a section");
+  } catch (e) {
+    log("looking for the game page tabs failed; showing News as a section", e);
+  }
+  return null;
+}
 
 function ago(ms: number): string {
   const s = Math.max(0, (Date.now() - ms) / 1000);
@@ -33,9 +82,9 @@ export default function activate(desk: DeskScrollApi) {
   const useNewsSettings = () => desk.settings.use<NewsSettings>();
 
   /** News and fresh Workshop books for a game. */
-  function useNews(appId: string | undefined) {
+  function useNews(appId: string | undefined, defaultCount = 3) {
     const s = useNewsSettings();
-    const count = s.count ?? 3;
+    const count = s.count ?? defaultCount;
     const [news, setNews] = useState<SteamNewsItem[] | null>(null);
     const [books, setBooks] = useState<WorkshopSummary[]>([]);
     const [error, setError] = useState<string | null>(null);
@@ -108,10 +157,13 @@ export default function activate(desk: DeskScrollApi) {
 
   // ---- the library page section ----
 
+  /** Whether the News tab is in use: wanted, and Steam's tabs were found. */
+  const tabWanted = (s: NewsSettings) => s.asTab !== false && tabsContext !== null;
+
   const LibrarySection: FC = () => {
     const { appid } = useParams<{ appid: string }>() ?? ({} as { appid?: string });
     const s = useNewsSettings();
-    const hidden = !appid || s.libraryPage === false || (s.hidden ?? []).includes(appid);
+    const hidden = !appid || s.libraryPage === false || tabWanted(s) || (s.hidden ?? []).includes(appid);
     const { news, books, error } = useNews(hidden ? undefined : appid);
     if (hidden || (news && !news.length && !books.length && !error)) return null;
     const hide = () => desk.settings.set<NewsSettings>({ hidden: [...(settings().hidden ?? []), appid!] });
@@ -135,7 +187,83 @@ export default function activate(desk: DeskScrollApi) {
     );
   };
 
-  // The same route patch Decky plugins use to add to the library page (e.g. ProtonDB Badges): find the page's
+  // ---- the News tab ----
+
+  const NewsTab: FC<{ appid: string }> = ({ appid }) => {
+    const { news, books, error } = useNews(appid, 8);
+    const hide = () => desk.settings.set<NewsSettings>({ hidden: [...(settings().hidden ?? []), appid] });
+    return (
+      <div style={{ padding: "16px 0" }}>
+        {!news && <div style={{ fontSize: "13px", opacity: 0.6 }}>Loading news…</div>}
+        {error && <div style={{ fontSize: "13px", opacity: 0.6 }}>⚠️ {error}</div>}
+        {news?.length === 0 && !books.length && !error && <div style={{ fontSize: "13px", opacity: 0.6 }}>No news for this game yet.</div>}
+        {books.map((b) => (
+          <BookRow key={b.id} book={b} appId={appid} />
+        ))}
+        {news?.map((n) => (
+          <NewsRow key={n.id} item={n} big />
+        ))}
+        <Focusable flow-children="row" style={{ display: "flex", justifyContent: "flex-end", marginTop: "8px" }}>
+          <DialogButton style={{ width: "auto", minWidth: 0, padding: "4px 12px", fontSize: "12px", height: "28px", margin: 0 }} onClick={hide}>
+            Hide the News tab for this game
+          </DialogButton>
+        </Focusable>
+      </div>
+    );
+  };
+
+  /** Adds the News tab to the tab list the strip under Play is drawn from. */
+  const tabListPatcher = createReactTreePatcher(
+    [(t: any) => findInReactTree(t, (x: any) => x?.props?.fnOnCancelFromTabHeader)],
+    (args: Array<Record<string, any>>, ret?: ReactElement) => {
+      try {
+        const strip = findInReactTree(ret, (x: any) => Array.isArray(x?.props?.tabs) && x.props.tabs.some((t: Tab) => t?.id));
+        const appid = String((args[0]?.overview?.appid ?? 0) >>> 0);
+        const s = settings();
+        if (!strip || appid === "0" || s.libraryPage === false || s.asTab === false || (s.hidden ?? []).includes(appid)) return ret;
+        const tabs: Tab[] = strip.props.tabs;
+        if (tabs.some((t) => t?.id === TAB_ID)) return ret;
+        const at = tabs.findIndex((t) => t?.id === ACTIVITY_TAB_ID) + 1 || tabs.length;
+        const tab: Tab = {
+          id: TAB_ID,
+          title: "News",
+          content: (
+            <ErrorBoundary>
+              <NewsTab appid={appid} />
+            </ErrorBoundary>
+          ),
+        };
+        // `tabs` is Steam's memoized array: hand the strip a copy rather than changing it.
+        strip.props.tabs = [...tabs.slice(0, at), tab, ...tabs.slice(at)];
+      } catch (e) {
+        desk.log("adding the News tab failed", e);
+      }
+      return ret;
+    },
+    "DeskGameNewsTabs"
+  );
+
+  // One wrapper per original tabs component, so the Provider's value keeps its identity and the tabs never remount.
+  const wrapped = new WeakMap<TabsComponent, TabsComponent>();
+  function wrapTabs(Orig: TabsComponent): TabsComponent {
+    if (typeof Orig !== "function" || Orig.prototype?.render) return Orig; // only a function component can be called inline
+    let w = wrapped.get(Orig);
+    if (!w) {
+      const render = Orig as (props: any) => ReactElement;
+      w = function DeskGameNewsAppDetailsTabs(props: any) {
+        return tabListPatcher([props], render(props));
+      };
+      wrapped.set(Orig, w);
+    }
+    return w;
+  }
+
+  const TabsProvider: FC<{ context: Context<TabsComponent>; children: ReactNode }> = ({ context, children }) => {
+    const Orig = useContext(context);
+    return <context.Provider value={wrapTabs(Orig)}>{children}</context.Provider>;
+  };
+
+    // The same route patch Decky plugins use to add to the library page (e.g. ProtonDB Badges): find the page's
   // inner container as it renders and put the section right after the Play/Install bar.
   desk.patchRoute("/library/app/:appid", (tree: any) => {
     const routeProps = findInReactTree(tree, (x: any) => x?.renderFunc);
@@ -147,8 +275,7 @@ export default function activate(desk: DeskScrollApi) {
             ret,
             (x: any) => Array.isArray(x?.props?.children) && x?.props?.className?.includes(appDetailsClasses.InnerContainer)
           );
-          if (typeof container !== "object") return ret;
-          if (!container.props.children.some((c: any) => c?.key === SECTION_KEY)) {
+          if (typeof container === "object" && !container.props.children.some((c: any) => c?.key === SECTION_KEY)) {
             container.props.children.splice(
               1,
               0,
@@ -157,7 +284,10 @@ export default function activate(desk: DeskScrollApi) {
               </ErrorBoundary>
             );
           }
-          return ret;
+          // The News tab. Always wrapped once the tabs are found (even when it's off), so turning it on or off
+          // doesn't change the page's element types and remount it.
+          const context = findTabsContext(desk.log);
+          return context && ret ? <TabsProvider context={context}>{ret}</TabsProvider> : ret;
         }
       );
       afterPatch(routeProps, "renderFunc", handler);
@@ -208,9 +338,16 @@ export default function activate(desk: DeskScrollApi) {
         <h2 style={{ marginTop: 0 }}>📰 Game News</h2>
         <ToggleField
           label="News on library pages"
-          description="A News section under Play/Install on each game's page."
+          description="Steam's news and patch notes on each game's page."
           checked={s.libraryPage !== false}
           onChange={(v) => set({ libraryPage: v })}
+        />
+        <ToggleField
+          label="As a News tab"
+          description="Next to Activity and Your Stuff under Play. Off: a News section right under Play instead."
+          checked={s.asTab !== false}
+          disabled={s.libraryPage === false}
+          onChange={(v) => set({ asTab: v })}
         />
         <ToggleField
           label="New Workshop books"

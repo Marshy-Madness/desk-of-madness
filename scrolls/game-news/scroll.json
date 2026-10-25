@@ -1,9 +1,9 @@
 {
   "name": "Game News",
   "icon": "📰",
-  "version": "1.0.0",
-  "summary": "A News section on each game's library page, and a News Tome on your Desk.",
-  "description": "Shows a game's latest Steam news and patch notes right on its library page, under Play/Install, plus new Madness Workshop books for that game. Tap a post to read it in Desk's reader view (no ads).\n\nYou can hide the section for any game from the section itself, and turn the library section or the Workshop books off in the Scroll's ⚙ Settings. The News Tome shows the same for the game on your Desk.",
+  "version": "1.1.0",
+  "summary": "A News tab on each game's library page, and a News Tome on your Desk.",
+  "description": "Shows a game's latest Steam news and patch notes in a News tab on its library page, next to Activity and Your Stuff, plus new Madness Workshop books for that game. Tap a post to read it in Desk's reader view (no ads).\n\nYou can hide the tab for any game from the tab itself. In the Scroll's ⚙ Settings you can show news as a section under Play instead, or turn off the library news or the Workshop books. The News Tome shows the same for the game on your Desk.",
   "author": "MarshyMadness",
   "minDesk": "0.3.0-beta.4",
   "permissions": ["library-page", "tomes", "network"]
