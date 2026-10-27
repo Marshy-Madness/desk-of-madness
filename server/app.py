@@ -746,10 +746,24 @@ class Handler(BaseHTTPRequestHandler):
         if ctype.startswith("text/html"):
             self.send_header("X-Frame-Options", "DENY")
             self.send_header("Cache-Control", "no-store")
+        for k, v in self.cors_headers().items():
+            self.send_header(k, v)
         for k, v in (headers or {}).items():
             self.send_header(k, v)
         self.end_headers()
         self.wfile.write(body)
+
+    def cors_headers(self) -> dict:
+        """Other apps (e.g. MadnessNotes in a browser) may call the API with a device token. Cookies are never
+        allowed cross-site (no Allow-Credentials) and X-Requested-With isn't allowed, so website sessions stay
+        same-site only."""
+        if not self.headers.get("Origin") or not urllib.parse.urlsplit(self.path).path.startswith("/api/"):
+            return {}
+        return {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Client",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE", "Access-Control-Max-Age": "86400"}
+
+    def do_OPTIONS(self):
+        self.send(204, b"", "text/plain")
 
     def redirect(self, location: str, cookie: str = None):
         headers = {"Location": location}
@@ -1469,8 +1483,9 @@ class Handler(BaseHTTPRequestHandler):
                     keep = [s for s in shares if not (s["id"] == p[2] and user["id"] in (s["from"], s["to"]))]
                     save_shares(keep)
                 return self.send(200, {"ok": len(keep) < len(shares)})
-            if len(p) == 3 and p[:2] == ["api", "devices"]:
-                return self.send(200, {"ok": accounts.revoke_token(user["id"], p[2])})
+            if len(p) == 3 and p[:2] == ["api", "devices"]:  # "self": the token making this request
+                token_id = self.device if p[2] == "self" else p[2]
+                return self.send(200, {"ok": bool(token_id) and accounts.revoke_token(user["id"], token_id)})
             if len(p) == 5 and p[:2] == ["api", "games"] and p[3] == "aliases":
                 store = Store(user["id"])
                 main = store.canon(safe(p[2]))

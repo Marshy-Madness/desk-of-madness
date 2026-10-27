@@ -55,6 +55,10 @@ Authorization: Bearer <token>
 
 Optional: `X-Client: n8n` (or any name) labels where a change came from in webhooks. It defaults to `deck`.
 
+Requests with a token may come from other websites too (CORS is open for `/api/…`, without cookies), so a web app
+such as MadnessNotes can call the API straight from the browser. `DELETE /api/devices/self` unlinks the token that
+makes the request; `GET /api/devices` lists your devices and `DELETE /api/devices/{id}` unlinks one.
+
 ## Reading
 
 | Request | Returns |
