@@ -102,6 +102,8 @@
   .hidden { display: none !important; }
   .steam-btn { display: block; text-align: center; background: #171a21; border: 1px solid #66c0f4; color: #66c0f4; padding: 12px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 14px 0 6px; }
   .steam-btn:hover { background: #1b2838; }
+  .sso-btn { display: block; text-align: center; background: #1d1a2b; border: 1px solid #fd4b2d; color: #ff8a73; padding: 12px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 14px 0 6px; }
+  .sso-btn:hover { background: #2a2033; }
   #account { display: flex; align-items: center; gap: 8px; } #account img { width: 24px; height: 24px; border-radius: 4px; }
   .person { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
   .person img, .person .ph { width: 32px; height: 32px; border-radius: 4px; background: #2c323d; }
@@ -250,6 +252,7 @@
 <body>
 <form id="login" class="hidden">
   <h2 style="margin-top:0">📝 Desk of Madness</h2>
+  <a href="/auth/oidc" class="sso-btn hidden" id="ssoBtn"></a>
   <a href="/auth/steam" class="steam-btn">Sign in with Steam</a>
   <div class="err" id="loginErr"></div>
   <div class="ok" id="loginOk"></div>
@@ -510,7 +513,7 @@ async function api(path, opts = {}) {
 
 // ---------- login ----------
 function showLogin() { $("#app").classList.add("hidden"); $("#login").classList.remove("hidden"); $("#email").focus(); }
-let signingUp = false, signupMode = "approval";
+let signingUp = false, signupMode = "approval", sso = null;
 function setSignup(on) {
   signingUp = on;
   $("#signupName").classList.toggle("hidden", !on);
@@ -569,6 +572,8 @@ async function start() {
   const info = await (await fetch("/api/me")).json();
   $("#toggleSignup").classList.toggle("hidden", info.emailSignups === false);
   signupMode = info.signups || "approval";
+  sso = info.sso || null;
+  if (sso) { $("#ssoBtn").textContent = sso.label; $("#ssoBtn").classList.remove("hidden"); }
   if (!info.loggedIn) return showLogin();
   me = info.user;
   me.admin = !!info.admin;
@@ -2133,7 +2138,9 @@ async function accountDialog() {
         ${me.hasPassword ? '<label>Current password</label><input id="aCurrent" type="password" autocomplete="current-password" style="width:100%">' : ""}
         <label>${me.hasPassword ? "New password (leave empty to keep it)" : "Password (8+ characters)"}</label><input id="aPass" type="password" autocomplete="new-password" style="width:100%">
         <label>Retype the ${me.hasPassword ? "new " : ""}password</label><input id="aPass2" type="password" autocomplete="new-password" style="width:100%">
-        <div class="err" id="aLoginErr"></div><div class="toolbar"><button class="primary" id="aSaveLogin">Save</button></div>`;
+        <div class="err" id="aLoginErr"></div><div class="toolbar"><button class="primary" id="aSaveLogin">Save</button></div>
+        ${sso ? `<p class="meta" style="margin-top:18px">${sso.linked ? `Linked to single sign-on: “${esc(sso.label)}” signs you in here, and MadnessNotes connects to your game notes by itself.` : "Not linked to single sign-on."}</p>
+          <div class="toolbar">${sso.linked ? '<button id="aSsoUnlink">Unlink single sign-on</button>' : '<a href="/auth/oidc?link=1"><button>Link single sign-on</button></a>'}</div>` : ""}`;
     }
     const app = window.DeskApp;
     dlg.innerHTML = `<div class="dlghead"><div class="person" style="border:0">${me.avatar ? `<img src="${esc(me.avatar)}">` : '<div class="ph"></div>'}<div class="who"><b>${esc(me.name)}</b><div class="meta">${[me.email, me.steamId ? "Steam " + me.steamId : "Not linked to Steam"].filter(Boolean).map(esc).join(" · ")}</div></div></div>
@@ -2153,6 +2160,11 @@ async function accountDialog() {
     dlg.querySelectorAll("[data-revoke]").forEach((b) => (b.onclick = async () => { if (confirm("Unlink this device?")) { await api(`/api/devices/${b.dataset.revoke}`, { method: "DELETE" }); draw("devices"); } }));
     if ($("#aSaveHooks", dlg)) $("#aSaveHooks", dlg).onclick = async () => { await api("/api/settings", { method: "POST", json: { webhooks: $("#aHooks", dlg).value.split("\n") } }); draw("notify"); };
     if ($("#aAdmin", dlg)) $("#aAdmin", dlg).onclick = () => { dlg.close(); adminDialog(); };
+    if ($("#aSsoUnlink", dlg)) $("#aSsoUnlink", dlg).onclick = async () => {
+      if (!confirm("Unlink single sign-on? You'll sign in with Steam or your email and password instead.")) return;
+      await api("/api/sso/unlink", { method: "POST", json: {} });
+      sso.linked = false; draw("login");
+    };
     if ($("#aSaveLogin", dlg)) $("#aSaveLogin", dlg).onclick = async () => {
       try {
         if ($("#aPass", dlg).value !== $("#aPass2", dlg).value) throw new Error("The passwords don't match. Type the same password in both boxes.");

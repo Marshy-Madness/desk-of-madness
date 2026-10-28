@@ -324,6 +324,58 @@ class Accounts:
                 return None, self.inactive_reason(user)
             return user, None
 
+    # ---- single sign-on (OpenID Connect) ----
+    def by_sso(self, sub: str):
+        return next((u for u in self.db["users"].values() if sub and u.get("ssoSub") == sub), None)
+
+    def login_sso(self, claims: dict, link_uid: str = None, auto_register: bool = True):
+        """Returns (user, error). Finds the user by SSO subject, then by a verified email, else creates one.
+        link_uid attaches the SSO identity to that (signed-in) user instead."""
+        sub = str(claims.get("sub") or "")
+        email = str(claims.get("email") or "").strip().lower() if claims.get("email_verified") is True else ""
+        with lock:
+            existing = self.by_sso(sub)
+            if link_uid:
+                if existing and existing["id"] != link_uid:
+                    return None, "That SSO account already belongs to another user."
+                user = self.db["users"][link_uid]
+            elif existing:
+                user = existing
+            elif email and self.by_email(email):
+                user = self.by_email(email)
+            elif not auto_register:
+                return None, "There's no Desk account for you yet. Ask the owner for one."
+            else:
+                uid = "u-" + secrets.token_hex(6)
+                user = {"id": uid, "email": email or None, "steamId": None, "role": "user", "avatar": "",
+                        "name": (str(claims.get("name") or claims.get("preferred_username") or "").strip()
+                                 or (email.split("@")[0] if email else "User"))[:60],
+                        "status": "active", "speech": bool(self.setting("speechDefault", False)),
+                        "createdAt": int(_now() * 1000), "tokens": [], "webhooks": []}
+                self.db["users"][uid] = user
+            user["ssoSub"] = sub
+            user["lastLogin"] = int(_now() * 1000)
+            self.save()
+            if not self.active(user):
+                return None, self.inactive_reason(user)
+            return user, None
+
+    def unlink_sso(self, uid: str):
+        with lock:
+            u = self.db["users"].get(uid)
+            if u and u.pop("ssoSub", None):
+                self.save()
+
+    def new_device_token(self, user: dict, label: str) -> str:
+        """A device token handed out without a pairing code (e.g. to MadnessNotes for the same SSO person)."""
+        token = secrets.token_urlsafe(32)
+        with lock:
+            user.setdefault("tokens", []).append({"id": secrets.token_hex(6), "hash": _h(token),
+                                                  "label": (label or "Device")[:60], "createdAt": int(_now() * 1000),
+                                                  "lastUsed": int(_now() * 1000)})
+            self.save()
+        return token
+
     def remove_user(self, uid: str):
         with lock:
             if uid == OWNER_ID or uid not in self.db["users"]:

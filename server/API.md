@@ -59,6 +59,16 @@ Requests with a token may come from other websites too (CORS is open for `/api/�
 such as MadnessNotes can call the API straight from the browser. `DELETE /api/devices/self` unlinks the token that
 makes the request; `GET /api/devices` lists your devices and `DELETE /api/devices/{id}` unlinks one.
 
+### Single sign-on (Authentik, Keycloak, …)
+Set `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` (and optionally `OIDC_LABEL`, `OIDC_AUTO_REGISTER=false`
+to only let in people who already have an account). Redirect URI: `<site>/auth/oidc/callback`. The first SSO
+sign-in links to the account with the same verified email; signed-in people can also link from 🔑 Sign-in.
+
+With `NOTES_LINK_SECRET` set, a MadnessNotes server holding the same secret may get a device token for someone who
+uses the same SSO account on both, so they skip the pairing code:
+`POST /api/sso/link` with header `X-Link-Secret: <secret>` and `{"sub": "<SSO subject>", "label": "MadnessNotes (linux)"}`
+returns `{token, user}`, or 404 when no Desk account has signed in with that SSO account yet.
+
 ## Reading
 
 | Request | Returns |

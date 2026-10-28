@@ -27,6 +27,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import achievements
 import merge
+import oidc
 import playstats
 import reader_cache
 import speech
@@ -45,6 +46,9 @@ BOOKSTORE_URL = (os.environ.get("WORKSHOP_URL") or os.environ.get("BOOKSTORE_URL
 MAX_BODY = 60 * 1024 * 1024
 SPEECH_PER_HOUR = int(os.environ.get("SPEECH_PER_HOUR", "120"))
 SAFE = re.compile(r"^[A-Za-z0-9._-]+$")
+# Shared with a MadnessNotes server: it may ask for a device token for someone who signed in to both with the
+# same SSO account (POST /api/sso/link), so they don't need a pairing code. Empty = off.
+NOTES_LINK_SECRET = os.environ.get("NOTES_LINK_SECRET", "")
 HERE = os.path.dirname(os.path.abspath(__file__))
 COOKIE = "sn_session"
 STATIC = {"manifest.webmanifest": "application/manifest+json", "icon.svg": "image/svg+xml", "sw.js": "text/javascript"}
@@ -852,6 +856,18 @@ class Handler(BaseHTTPRequestHandler):
             return self.redirect(steam.login_url(back, self.base_url() + "/"))
         if p == ["auth", "steam", "callback"]:
             return self.steam_callback()
+        if p == ["auth", "oidc"] and oidc.enabled():
+            link_uid = None
+            if self.query().get("link"):
+                current = accounts.session_user(self.session_id())
+                link_uid = current["id"] if current else None
+            try:
+                return self.redirect(oidc.start(f"{self.base_url()}/auth/oidc/callback", link_uid))
+            except (OSError, ValueError) as e:
+                print(f"oidc start failed: {e}", flush=True)
+                return self.redirect("/?error=" + urllib.parse.quote("Single sign-on isn't reachable right now. Try again later."))
+        if p == ["auth", "oidc", "callback"] and oidc.enabled():
+            return self.oidc_callback()
         if p[0] != "api":
             return self.send(404, {"error": "not found"})
 
@@ -865,7 +881,8 @@ class Handler(BaseHTTPRequestHandler):
                                    "speech": speech_on(u), "signups": accounts.signup_mode(),
                                    "emailSignups": accounts.signup_mode() != "invite" and accounts.setting("emailSignups", True),
                                    "admin": accounts.is_admin(u), "announcement": accounts.setting("announcement", ""),
-                                   "pendingUsers": len(accounts.pending()) if accounts.is_admin(u) else 0})
+                                   "pendingUsers": len(accounts.pending()) if accounts.is_admin(u) else 0,
+                                   "sso": {"label": oidc.LABEL, "linked": bool(u and u.get("ssoSub"))} if oidc.enabled() else None})
 
         user = self.current_user()
         if not user:
@@ -1102,6 +1119,39 @@ class Handler(BaseHTTPRequestHandler):
             return self.redirect("/?error=" + urllib.parse.quote(err))
         return self.redirect("/", self.cookie_for(accounts.new_session(user["id"])))
 
+    def oidc_callback(self):
+        try:
+            claims, link_uid = oidc.finish(self.query())
+        except (OSError, ValueError) as e:
+            print(f"oidc callback failed: {e}", flush=True)
+            msg = str(e) if isinstance(e, ValueError) else "Couldn't reach the sign-in provider"
+            return self.redirect("/?error=" + urllib.parse.quote(f"Single sign-on failed: {msg}"))
+        new = not accounts.by_sso(claims["sub"])
+        user, err = accounts.login_sso(claims, link_uid, oidc.AUTO_REGISTER)
+        if err:
+            return self.redirect("/?error=" + urllib.parse.quote(err))
+        if new:
+            accounts.log("user.sso", f"{user.get('name')} linked single sign-on", target=user["id"])
+        return self.redirect("/", self.cookie_for(accounts.new_session(user["id"])))
+
+    def sso_link(self):
+        """MadnessNotes server → here: a device token for the person with this SSO subject (if they have an account)."""
+        given = self.headers.get("X-Link-Secret", "")
+        if not NOTES_LINK_SECRET or not given or not hmac.compare_digest(given.encode(), NOTES_LINK_SECRET.encode()):
+            self.failed()
+            return self.send(401, {"error": "unauthorized"})
+        data = self.json_body()
+        user = accounts.by_sso(str(data.get("sub") or ""))
+        if not user or not accounts.active(user):
+            return self.send(404, {"error": "No Desk account is linked to that sign-in yet. Sign in to Desk of Madness with SSO once."})
+        limit = int(accounts.setting("maxDevices", 0) or 0)
+        if limit and not accounts.is_admin(user) and len(user.get("tokens", [])) >= limit:
+            return self.send(400, {"error": f"You can link up to {limit} devices. Unlink one on the Desk website first."})
+        label = str(data.get("label") or "MadnessNotes")
+        token = accounts.new_device_token(user, label)
+        accounts.log("device.sso", f"{user.get('name')} linked {label} through single sign-on", target=user["id"])
+        return self.send(200, {"token": token, "user": accounts.public(user)})
+
     # ---------- POST ----------
     def do_POST(self):
         try:
@@ -1145,6 +1195,16 @@ class Handler(BaseHTTPRequestHandler):
         if p == ["api", "logout"]:
             accounts.end_session(self.session_id())
             return self.send(200, {"ok": True}, headers={"Set-Cookie": f"{COOKIE}=; Path=/; Max-Age=0"})
+        if p == ["api", "sso", "link"]:
+            if self.throttled():
+                return self.send(429, {"error": "Too many attempts. Try again in 15 minutes."})
+            return self.sso_link()
+        if p == ["api", "sso", "unlink"]:
+            user = self.current_user(mutating=True)
+            if not user:
+                return self.send(401, {"error": "unauthorized"})
+            accounts.unlink_sso(user["id"])
+            return self.send(200, {"ok": True})
         if p == ["api", "pair"]:  # device exchanges a pairing code for a token
             if self.throttled():
                 return self.send(429, {"error": "Too many attempts. Try again in 15 minutes."})
