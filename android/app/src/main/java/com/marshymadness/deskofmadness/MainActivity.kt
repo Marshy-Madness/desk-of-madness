@@ -471,11 +471,20 @@ class MainActivity : Activity() {
         return listOf("steamcommunity.com", "steampowered.com").any { host == it || host.endsWith(".$it") }
     }
 
+    /** Sign-in providers the Desk site redirected to (see Client). */
+    private val loginHosts = mutableSetOf<String>()
+
     private inner class Client(private val store: Boolean) : WebViewClient() {
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
             val url = request.url
             if (url.scheme == "file") return false
             if (sameSite(url, if (store) bookstore else server) || isSteamLogin(url)) return false
+            // Single sign-on: the Desk server redirects to the sign-in provider (Authentik…). Keep that host in the
+            // app for the rest of the login, so it comes back here with the session instead of finishing in the browser.
+            if (!store && (request.isRedirect || url.host in loginHosts)) {
+                url.host?.let { loginHosts.add(it) }
+                return false
+            }
             if (!store && sameSite(url, bookstore)) { // a Workshop link on the Desk site: open it in the Workshop tab
                 storeLoaded = true
                 storeView.loadUrl(url.toString())
