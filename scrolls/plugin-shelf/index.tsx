@@ -1,4 +1,4 @@
-import { cloneElement, FC, isValidElement, ReactElement, ReactNode } from "react";
+import { cloneElement, Fragment, FC, isValidElement, ReactElement, ReactNode } from "react";
 import { ButtonItem, DialogButton, Dropdown, ErrorBoundary, Focusable, ModalRoot, PanelSection, PanelSectionRow, ToggleField, useParams } from "@decky/ui";
 import { FaFolder, FaPuzzlePiece } from "react-icons/fa";
 import type { DeskScrollApi } from "../../src/scrolls/api";
@@ -19,6 +19,8 @@ interface ShelfSettings {
   folders?: Folder[];
   /** Show folders in Decky's own list. On unless turned off. */
   group?: boolean;
+  /** Names (plugins and "📁 folder") in the order Decky's list shows them. */
+  order?: string[];
 }
 
 /** One of Decky's loaded plugins (the parts we use). */
@@ -105,9 +107,11 @@ export default function activate(desk: DeskScrollApi) {
   const pseudoCache = new Map<string, any>();
   const pseudoName = (f: Folder) => `📁 ${f.name}`;
 
+  const inFolder = (f?: Folder) => (f?.plugins ?? []).map((n) => deckyPlugins().find((p) => p.name === n)).filter((p): p is DeckyPlugin => !!p);
+
   const FolderPanel: FC<{ folderId: string }> = ({ folderId }) => {
     const folder = settings().folders?.find((f) => f.id === folderId);
-    const plugins = deckyPlugins().filter((p) => folder?.plugins.includes(p.name));
+    const plugins = inFolder(folder);
     return (
       <PanelSection>
         {plugins.map((p) => (
@@ -131,13 +135,14 @@ export default function activate(desk: DeskScrollApi) {
     );
   };
 
-  /** Decky's list with folders: folder entries first, the plugins inside them left out of the main list. */
+  /** Decky's list with folders (folder entries first, their plugins left out of the main list), then the saved order. */
   function withFolders(state: any) {
     const s = settings();
-    if (s.group === false || !s.folders?.length || !Array.isArray(state?.plugins)) return state;
+    if (!Array.isArray(state?.plugins)) return state;
+    const order = s.order ?? [];
     const names = new Set<string>(state.plugins.map((p: DeckyPlugin) => p.name));
-    const folders = s.folders.filter((f) => f.plugins.some((n) => names.has(n)));
-    if (!folders.length) return state;
+    const folders = s.group === false ? [] : (s.folders ?? []).filter((f) => f.plugins.some((n) => names.has(n)));
+    if (!folders.length && !order.length) return state;
     const grouped = new Set(folders.flatMap((f) => f.plugins));
     const pseudo = folders.map((f) => {
       const sig = `${f.id}|${f.name}`;
@@ -146,11 +151,17 @@ export default function activate(desk: DeskScrollApi) {
       }
       return pseudoCache.get(sig);
     });
+    let list = [...pseudo, ...state.plugins.filter((p: DeckyPlugin) => !grouped.has(p.name))];
+    if (order.length) {
+      const rank = (p: DeckyPlugin) => order.indexOf(p.name);
+      list = [...list.filter((p) => rank(p) >= 0).sort((a, b) => rank(a) - rank(b)), ...list.filter((p) => rank(p) < 0)];
+    }
     const active = openFolder ? pseudo.find((p) => p.__folder === openFolder) : null;
     return {
       ...state,
-      plugins: [...pseudo, ...state.plugins.filter((p: DeckyPlugin) => !grouped.has(p.name))],
-      pluginOrder: Array.isArray(state.pluginOrder) ? [...pseudo.map((p) => p.name), ...state.pluginOrder] : state.pluginOrder,
+      plugins: list,
+      pluginOrder: order.length ? list.map((p) => p.name) : Array.isArray(state.pluginOrder) ? [...pseudo.map((p) => p.name), ...state.pluginOrder] : state.pluginOrder,
+      sortPlugins: order.length ? false : state.sortPlugins,
       activePlugin: active ?? state.activePlugin,
     };
   }
@@ -182,8 +193,14 @@ export default function activate(desk: DeskScrollApi) {
       return typeof v === "function" ? v.bind(target) : v;
     },
   });
-  const wrapped = new WeakMap<object, any>();
+  // A fresh Fragment key remounts Decky's provider whenever the folders change (a key on the provider itself didn't stick).
+  const RemountBox: FC<{ sig: string; children?: ReactNode }> = ({ sig, children }) => <Fragment key={sig}>{children}</Fragment>;
+  // Decky's state provider reads its state once when it mounts, so a swapped-in proxy only counts if the
+  // provider is remounted: the swap carries a new key whenever the folders change.
+  const originals = new WeakMap<object, any>(); // our panel -> Decky's own
+  const applied = new Map<any, { sig: string; panel: any }>(); // Decky's panel -> our panel
   let warnedNoProvider = false;
+  let lastTab: any = null;
 
   desk.onQamTabs((tabs) => {
     for (const p of pinned("qam")) {
@@ -191,13 +208,28 @@ export default function activate(desk: DeskScrollApi) {
       if (tabs.some((t) => t?.key === key)) continue;
       tabs.push({ key, title: p.name, tab: iconOf(p), panel: <ErrorBoundary>{p.content}</ErrorBoundary> });
     }
-    const s = settings();
-    if (s.group === false || !s.folders?.length) return;
     const decky = tabs.find((t) => t?.key === DECKY_TAB);
     if (!decky?.panel || typeof decky.panel !== "object") return;
-    if (!wrapped.has(decky.panel)) {
-      const swapped = replaceIn(decky.panel, (el) => el.props?.deckyState === ds, (el) => cloneElement(el, { deckyState: proxy }));
-      if (!swapped && !warnedNoProvider) {
+    // The tab object outlives this Scroll instance, so a panel swapped by an earlier run is recognised here.
+    const mark = decky as any;
+    const base = mark.__domShelfPanel === decky.panel ? mark.__domShelfBase : (originals.get(decky.panel) ?? decky.panel);
+    lastTab = decky;
+    const s = settings();
+    const foldersOn = s.group !== false && !!s.folders?.length;
+    if (!foldersOn && !s.order?.length) {
+      decky.panel = base;
+      return;
+    }
+    const sig = JSON.stringify([foldersOn ? s.folders : null, s.order ?? null]);
+    const hit = applied.get(base);
+    if (hit?.sig === sig) {
+      decky.panel = hit.panel;
+      return;
+    }
+    // Matches any state provider, so a stand-in left by an older run is replaced too.
+    const swapped = replaceIn(base, (el) => typeof el.props?.deckyState?.publicState === "function", (el) => <RemountBox sig={sig}>{cloneElement(el, { deckyState: proxy } as any)}</RemountBox>);
+    if (!swapped) {
+      if (!warnedNoProvider) {
         warnedNoProvider = true;
         save({ group: false });
         desk.decky.toaster.toast({
@@ -206,12 +238,17 @@ export default function activate(desk: DeskScrollApi) {
           duration: 8000,
         });
       }
-      wrapped.set(decky.panel, swapped ?? decky.panel);
+      return;
     }
-    decky.panel = wrapped.get(decky.panel);
+    applied.set(base, { sig, panel: swapped });
+    originals.set(swapped, base);
+    mark.__domShelfBase = base;
+    mark.__domShelfPanel = swapped;
+    decky.panel = swapped;
   });
   desk.onUnload(() => {
     openFolder = null;
+    if (lastTab?.__domShelfPanel === lastTab?.panel) lastTab.panel = lastTab.__domShelfBase;
     notify(ds);
   });
 
@@ -245,8 +282,7 @@ export default function activate(desk: DeskScrollApi) {
             <div style={{ fontSize: "11px", fontWeight: "bold", letterSpacing: "0.06em", textTransform: "uppercase", opacity: 0.6, margin: "6px 0 3px" }}>
               📁 {f.name}
             </div>
-            {plugins
-              .filter((p) => f.plugins.includes(p.name))
+            {inFolder(f)
               .map((p) => (
                 <Line key={p.name} icon={iconOf(p)} onOpen={() => open(p.name)} okLabel="Open">
                   {p.name}
@@ -287,6 +323,43 @@ export default function activate(desk: DeskScrollApi) {
       const name = await desk.askText("Rename folder", "Folder name", f.name);
       if (name) save({ folders: folders.map((x) => (x.id === f.id ? { ...x, name } : x)) });
     };
+    const shown = withFolders(ds.publicState());
+    const rankOf = (p: DeckyPlugin) => (Array.isArray(shown?.pluginOrder) ? shown.pluginOrder.indexOf(p.name) : 0);
+    const mainList = [...((shown?.plugins ?? []) as DeckyPlugin[])]
+      .filter((p) => p.content)
+      .sort((x, y) => (shown?.sortPlugins ? x.name.localeCompare(y.name, undefined, { sensitivity: "base" }) : rankOf(x) - rankOf(y)));
+    const shift = (names: string[], i: number, d: number) => {
+      const j = i + d;
+      if (j < 0 || j >= names.length) return names;
+      const out = [...names];
+      [out[i], out[j]] = [out[j], out[i]];
+      return out;
+    };
+    const moveMain = (i: number, d: number) => save({ order: shift(mainList.map((p) => p.name), i, d) });
+    const moveInFolder = (f: Folder, i: number, d: number) => {
+      const present = inFolder(f).map((p) => p.name);
+      const next = shift(present, i, d);
+      save({ folders: folders.map((x) => (x.id === f.id ? { ...x, plugins: [...next, ...x.plugins.filter((n) => !present.includes(n))] } : x)) });
+    };
+    const Arrows: FC<{ i: number; n: number; move: (d: number) => void }> = ({ i, n, move }) => (
+      <Focusable flow-children="row" style={{ display: "flex", gap: "4px" }}>
+        <DialogButton style={{ width: "auto", minWidth: 0, padding: "4px 12px" }} disabled={i === 0} onClick={() => move(-1)}>
+          ▲
+        </DialogButton>
+        <DialogButton style={{ width: "auto", minWidth: 0, padding: "4px 12px" }} disabled={i === n - 1} onClick={() => move(1)}>
+          ▼
+        </DialogButton>
+      </Focusable>
+    );
+    const OrderRow: FC<{ icon: ReactNode; label: string; i: number; n: number; move: (d: number) => void }> = ({ icon, label, i, n, move }) => (
+      <Focusable flow-children="row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 10px", marginBottom: "4px", borderRadius: "4px", background: "rgba(255,255,255,0.05)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          {icon} {label}
+        </div>
+        <Arrows i={i} n={n} move={move} />
+      </Focusable>
+    );
+    const heading = { fontSize: "12px", fontWeight: "bold", letterSpacing: "0.06em", textTransform: "uppercase", opacity: 0.6, margin: "10px 0 4px" } as const;
     const folderOptions = [{ label: "No folder", data: "" }, ...folders.map((f) => ({ label: `📁 ${f.name}`, data: f.id }))];
     return (
       <ModalRoot onCancel={closeModal} closeModal={closeModal} bAllowFullSize>
@@ -321,9 +394,29 @@ export default function activate(desk: DeskScrollApi) {
             + New folder
           </DialogButton>
         </Focusable>
-        <div style={{ fontSize: "12px", fontWeight: "bold", letterSpacing: "0.06em", textTransform: "uppercase", opacity: 0.6, margin: "10px 0 4px" }}>
-          Plugins
-        </div>
+        <div style={heading}>Order in Decky's list</div>
+        <Focusable style={{ maxHeight: "40vh", overflowY: "auto" }}>
+          {mainList.map((p, i) => (
+            <OrderRow key={p.name} icon={iconOf(p)} label={p.name} i={i} n={mainList.length} move={(d) => moveMain(i, d)} />
+          ))}
+          {!!s.order?.length && (
+            <DialogButton style={{ marginTop: "4px" }} onClick={() => save({ order: [] })}>
+              Back to Decky's own order
+            </DialogButton>
+          )}
+          {folders.map((f) => {
+            const list = inFolder(f);
+            return list.length > 1 ? (
+              <div key={f.id}>
+                <div style={heading}>📁 {f.name}</div>
+                {list.map((p, i) => (
+                  <OrderRow key={p.name} icon={iconOf(p)} label={p.name} i={i} n={list.length} move={(d) => moveInFolder(f, i, d)} />
+                ))}
+              </div>
+            ) : null;
+          })}
+        </Focusable>
+        <div style={heading}>Plugins</div>
         <Focusable style={{ maxHeight: "50vh", overflowY: "auto" }}>
           {plugins.length === 0 && <div style={{ opacity: 0.7 }}>No other Decky plugins are loaded.</div>}
           {plugins.map((p) => (
