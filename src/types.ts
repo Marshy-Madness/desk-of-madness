@@ -228,7 +228,7 @@ export type BringForward = "menu" | "qam";
 /** What a voice command does with words that don't start with a command. */
 export type VoiceFallback = "note" | "append" | "nothing";
 /** Where STEAM + L5 + R5 dictation goes: typed into whatever is focused, or saved as a note. */
-export type DictateTarget = "type" | "note";
+export type DictateTarget = "type" | "note" | "vault";
 
 export interface Settings {
   sort?: SortMode;
@@ -294,6 +294,25 @@ export interface Settings {
   /** How the left trackpad scrolls the browser: "circle" (default: draw circles, clockwise goes down the page)
    * or "swipe" (slide the thumb, as on the touch screen). */
   padScroll?: PadScroll;
+  /** Path of the Madness Notes AppImage on this Deck, and the Steam shortcut made for it. */
+  notesAppPath?: string;
+  notesShortcutId?: number;
+  /** Server that publishes Madness Notes builds (default https://notes.marshymadness.com). */
+  notesServerUrl?: string;
+  /** Madness Notes API token and the vault Desk reads and writes (quick capture, game notes). */
+  notesToken?: string;
+  notesVaultId?: string;
+  notesVaultName?: string;
+  /** Last Madness Notes version we told the user about. */
+  notesUpdateSeen?: string;
+  /** Write each finished play session (date, minutes, where you left off) to the game's vault note. */
+  notesSessionLog?: boolean;
+  /** Also copy screenshots you attach to a note into the game's vault note. */
+  notesScreenshots?: boolean;
+  /** Keep the Madness Notes shortcut out of the Steam library. */
+  notesHideShortcut?: boolean;
+  /** Last vault note opened per game (appid -> path). */
+  notesLastOpened?: Record<string, string>;
   /** How links in notes open: "reader" (default: just the article, no ads) or "full" (the whole site). */
   browserMode?: BrowserMode;
   /** Games picked in Steam's store open in a new tab of our browser, so the store keeps your place. On unless
@@ -694,4 +713,36 @@ export interface GameAchievements {
 export interface AchievementData {
   updatedAt: number;
   games: Record<string, GameAchievements>;
+}
+
+export interface NotesAppCheck {
+  latest: string;
+  installed: string;
+  available: boolean;
+  newer: boolean;
+}
+
+export interface NotesAppProgress {
+  state: "idle" | "running" | "done" | "error";
+  done: number;
+  total: number;
+  error: string;
+  path: string;
+}
+
+export type VaultResult<T> = { ok: true; data: T } | { ok: false; error: string };
+export interface NotesVault {
+  id: string;
+  name: string;
+  role: string;
+}
+export interface NotesRelated {
+  path: string;
+  title: string;
+}
+
+export interface NotesGameNote {
+  path: string;
+  content: string;
+  tasks: { line: number; done: boolean; text: string }[];
 }

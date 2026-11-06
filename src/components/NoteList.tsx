@@ -9,7 +9,7 @@ import {
   showContextMenu,
   showModal,
 } from "@decky/ui";
-import { FaBook, FaUserFriends, FaArrowLeft, FaTrashRestore, FaCamera, FaFolder, FaFolderPlus, FaPlus, FaSkull, FaSortAmountDown, FaCheck } from "react-icons/fa";
+import { FaBook, FaUserFriends, FaArrowLeft, FaTrashRestore, FaCamera, FaFolder, FaFolderPlus, FaPlus, FaSkull, FaSortAmountDown, FaCheck, FaExternalLinkAlt } from "react-icons/fa";
 import { backend } from "../api/backend";
 import { useGame } from "../state/NotesProvider";
 import { emitDataChanged, updateSettings, useSettings } from "../state/notesStore";
@@ -33,6 +33,7 @@ import { DeletedNotesModal, VersionHistoryModal } from "./VersionHistory";
 import { usePendingScreenshots } from "../state/pendingScreenshots";
 import { lastFolder, noteToReopen, rememberFolder, EditorDraft } from "../state/resume";
 import { setPlace } from "../state/place";
+import { openVaultMenu } from "../vaultMenu";
 import * as s from "./styles";
 
 const GUIDES = "__guides";
@@ -290,6 +291,15 @@ export const NoteList: FC<{ live?: boolean; onBack?: () => void; backLabel?: str
         >
           <FaSortAmountDown /> {fullScreen && SORT_LABELS[sort]}
         </DialogButton>
+        {game?.name && (
+          <DialogButton
+            style={fullScreen ? { ...s.smallButton, height: "40px" } : s.iconButton}
+            onClick={() => openVaultMenu(game.appId, game.name)}
+            {...({ title: "Madness Notes", "aria-label": "Madness Notes" } as any)}
+          >
+            <FaExternalLinkAlt /> {fullScreen && "Madness Notes"}
+          </DialogButton>
+        )}
       </Focusable>
       {presentKinds.length > 0 && (
         <Focusable flow-children="row" style={{ ...s.toolbar, flexWrap: "wrap" }}>

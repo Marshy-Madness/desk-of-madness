@@ -1,13 +1,21 @@
 import { FC, useState } from "react";
 import { ModalRoot, DialogButton, Focusable, TextField } from "@decky/ui";
 import { backend } from "../api/backend";
-import { emitDataChanged } from "../state/notesStore";
+import { getSettings, emitDataChanged } from "../state/notesStore";
 import { formatDate, newId } from "../utils/format";
 
+/** Adds the finished session to the game's Madness Notes note, when that's switched on and connected. */
+export function logToVault(appId: string, gameName: string, minutes: number, leftOff: string) {
+  const s = getSettings();
+  if (!s.notesSessionLog || !s.notesToken || !s.notesVaultId || minutes < 1) return;
+  backend.notesLogSession(appId, gameName, minutes, leftOff).catch(() => {});
+}
+
 /** Optional end-of-session prompt; saves the answer as a regular note tagged #recap. */
-export const SessionSummaryModal: FC<{ appId: string; gameName: string; closeModal?: () => void }> = ({
+export const SessionSummaryModal: FC<{ appId: string; gameName: string; minutes?: number; closeModal?: () => void }> = ({
   appId,
   gameName,
+  minutes,
   closeModal,
 }) => {
   const [body, setBody] = useState("");
@@ -30,6 +38,11 @@ export const SessionSummaryModal: FC<{ appId: string; gameName: string; closeMod
       });
       emitDataChanged();
     }
+    if (minutes) logToVault(appId, gameName, minutes, body.trim());
+    closeModal?.();
+  };
+  const skip = () => {
+    if (minutes) logToVault(appId, gameName, minutes, "");
     closeModal?.();
   };
 
@@ -44,7 +57,7 @@ export const SessionSummaryModal: FC<{ appId: string; gameName: string; closeMod
       />
       <Focusable style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
         <DialogButton onClick={save}>Save</DialogButton>
-        <DialogButton onClick={closeModal}>Skip</DialogButton>
+        <DialogButton onClick={skip}>Skip</DialogButton>
       </Focusable>
     </ModalRoot>
   );

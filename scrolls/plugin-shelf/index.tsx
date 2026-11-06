@@ -57,9 +57,12 @@ function replaceIn(node: any, match: (el: any) => boolean, swap: (el: any) => an
   }
   if (!isValidElement(node)) return null;
   if (match(node)) return swap(node);
-  const kids = (node.props as any)?.children;
-  const r = kids ? replaceIn(kids, match, swap, depth + 1) : null;
-  return r ? cloneElement(node as ReactElement, { children: r } as any) : null;
+  const props = node.props as any;
+  const kids = props?.children ? replaceIn(props.children, match, swap, depth + 1) : null;
+  if (kids) return cloneElement(node as ReactElement, { children: kids } as any);
+  // Desk's own folders hook wraps Decky's list as <Switch decky={...}>, outside children.
+  const inner = props?.decky ? replaceIn(props.decky, match, swap, depth + 1) : null;
+  return inner ? cloneElement(node as ReactElement, { decky: inner } as any) : null;
 }
 
 export default function activate(desk: DeskScrollApi) {

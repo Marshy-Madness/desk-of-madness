@@ -30,6 +30,13 @@ export const AttachScreenshotsModal: FC<{ pending: PendingShots; closeModal?: ()
     try {
       const out: Screenshot[] = [];
       for (const path of pending.paths) out.push(await backend.attachScreenshot(pending.appId, path));
+      const st = getSettings();
+      if (st.notesScreenshots && st.notesToken && st.notesVaultId) {
+        for (const path of pending.paths) {
+          const r = await backend.notesAddScreenshot(pending.appId, game?.name ?? pending.appId, path);
+          if (!r.ok) toaster.toast({ title: "Madness Notes", body: `Screenshot not sent to the vault: ${r.error}` });
+        }
+      }
       if (getSettings().removeFromSteam) await removeFromSteam(pending.appId, pending.paths).catch(() => 0);
       clearPendingScreenshots();
       return out;

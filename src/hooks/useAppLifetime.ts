@@ -7,6 +7,7 @@ import { emitDataChanged } from "../state/notesStore";
 export interface RunningGame {
   appId: string;
   name: string;
+  startedAt?: number;
 }
 
 let current: RunningGame | null = null;
@@ -41,7 +42,7 @@ export function startLifetimeTracking(sessionEnded: (game: RunningGame) => void)
       const appId = String(n.unAppID);
       if (n.bRunning) {
         if (current?.appId === appId) return; // extra process for the same game
-        const game = { appId, name: appName(appId) };
+        const game = { appId, name: appName(appId), startedAt: Date.now() };
         setCurrent(game);
         const summary = await backend.recordLaunch(appId, game.name);
         emitDataChanged();

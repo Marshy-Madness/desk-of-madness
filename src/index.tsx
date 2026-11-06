@@ -3,11 +3,12 @@ import { showModal } from "@decky/ui";
 import { FaRegStickyNote } from "react-icons/fa";
 import { backend } from "./api/backend";
 import { QuickAccessPanel } from "./components/QuickAccessPanel";
-import { SessionSummaryModal } from "./components/SessionSummaryModal";
+import { SessionSummaryModal, logToVault } from "./components/SessionSummaryModal";
 import { AttachScreenshotsModal } from "./components/AttachScreenshotsModal";
 import { getRunningGame, startLifetimeTracking } from "./hooks/useAppLifetime";
 import { startAchievementWatch } from "./state/achievements";
 import { startIntegrations } from "./integrations";
+import { checkNotesUpdateOnStart } from "./madnessNotes";
 import { emitDataChanged, getSettings, loadSettings } from "./state/notesStore";
 import { addPendingScreenshot, getPendingScreenshots } from "./state/pendingScreenshots";
 import { refreshSpeech } from "./state/speech";
@@ -51,6 +52,7 @@ function startScreenshotWatch(): () => void {
 
 export default definePlugin(() => {
   loadSettings();
+  setTimeout(checkNotesUpdateOnStart, 15000);
   ensureTheme();
   // First start after the rename: say the Session Notes data came across (once).
   backend.importNotice().then((n) => {
@@ -58,8 +60,11 @@ export default definePlugin(() => {
   }).catch(() => {});
   refreshSpeech();
   const stopTracking = startLifetimeTracking((game) => {
+    const minutes = game.startedAt ? Math.round((Date.now() - game.startedAt) / 60000) : 0;
     if (getSettings().sessionRecap) {
-      showModal(<SessionSummaryModal appId={game.appId} gameName={game.name} />);
+      showModal(<SessionSummaryModal appId={game.appId} gameName={game.name} minutes={minutes} />);
+    } else {
+      logToVault(game.appId, game.name, minutes, "");
     }
   });
   const stopScreenshots = startScreenshotWatch();

@@ -46,6 +46,11 @@ async function finish() {
     const words = await backend.stopDictation(game?.appId ?? "", game?.name ?? "");
     if (!words) {
       toaster.toast({ title: "Desk of Madness", body: "Didn't catch anything. Try again a little louder." });
+    } else if (getSettings().dictateTarget === "vault") {
+      const r = await backend.notesCapture(game?.appId ?? "", game?.name ?? "", words);
+      toaster.toast(
+        r.ok ? { title: "📥 Added to Deck Inbox", body: words } : { title: "Couldn't reach Madness Notes", body: r.error },
+      );
     } else if (getSettings().dictateTarget === "note" && game) {
       await saveAsNote(game.appId, game.name, words);
       toaster.toast({ title: `📝 Saved to ${game.name}`, body: words });

@@ -1,5 +1,5 @@
 import { call } from "@decky/api";
-import { AchievementData, PlaySettings, PlayStats, DockerContainer, HomeEntity, NoteHit, DeskLayout, InstalledScroll, SteamNewsItem, WorkshopScroll, WorkshopEntry, WorkshopGame, WorkshopPack, WorkshopSummary, WorkshopUser, ServerUser, Share, BackupStatus, Counter, DeletedNote, Folder, NoteVersion, LeftOff, Game, GameSummary, Note, Recording, Screenshot, Settings, SteamScreenshot, ReaderPage, ReaderCacheSettings, WikiSite, WikiResult, WikiChoice } from "../types";
+import { AchievementData, PlaySettings, PlayStats, DockerContainer, HomeEntity, NoteHit, DeskLayout, InstalledScroll, SteamNewsItem, WorkshopScroll, WorkshopEntry, WorkshopGame, WorkshopPack, WorkshopSummary, WorkshopUser, ServerUser, Share, BackupStatus, Counter, DeletedNote, Folder, NoteVersion, LeftOff, Game, GameSummary, Note, Recording, Screenshot, Settings, SteamScreenshot, ReaderPage, ReaderCacheSettings, WikiSite, WikiResult, WikiChoice, NotesAppCheck, NotesAppProgress, NotesVault, NotesRelated, NotesGameNote, VaultResult } from "../types";
 
 export const backend = {
   importNotice: () => call<[], { from: string } | null>("import_notice"),
@@ -138,6 +138,31 @@ export const backend = {
   dockerList: () => call<[], DockerContainer[]>("docker_list"),
   dockerAction: (name: string, action: "start" | "stop" | "restart") =>
     call<[string, string], { name: string; state: string }>("docker_action", name, action),
+
+  findNotesApp: () => call<[], string>("find_notes_app"),
+  prepareNotesApp: (path: string) => call<[string], boolean>("prepare_notes_app", path),
+  notesAppCheck: (server: string, path: string) =>
+    call<[string, string], NotesAppCheck>("notes_app_check", server, path),
+  notesAppDownload: (server: string) => call<[string], NotesAppProgress>("notes_app_download", server),
+  notesAppProgress: () => call<[], NotesAppProgress>("notes_app_progress"),
+  notesVaults: () => call<[], VaultResult<NotesVault[]>>("notes_vaults"),
+  notesCapture: (appid: string, game: string, text: string) =>
+    call<[string, string, string], VaultResult<{ path: string }>>("notes_capture", appid, game, text),
+  notesGameNote: (appid: string, game: string, create: boolean) =>
+    call<[string, string, boolean], VaultResult<{ path: string; created: boolean }>>("notes_game_note", appid, game, create),
+  notesRelated: (appid: string, game: string) =>
+    call<[string, string], VaultResult<NotesRelated[]>>("notes_related", appid, game),
+  notesReadGame: (appid: string, game: string) =>
+    call<[string, string], VaultResult<NotesGameNote>>("notes_read_game", appid, game),
+  notesAppendGame: (appid: string, game: string, text: string, heading = "") =>
+    call<[string, string, string, string], VaultResult<{ path: string }>>("notes_append_game", appid, game, text, heading),
+  notesToggleTask: (appid: string, game: string, line: number, done: boolean) =>
+    call<[string, string, number, boolean], VaultResult<{ path: string }>>("notes_toggle_task", appid, game, line, done),
+  notesLogSession: (appid: string, game: string, minutes: number, leftOff: string) =>
+    call<[string, string, number, string], VaultResult<{ path: string }>>("notes_log_session", appid, game, minutes, leftOff),
+  notesAddScreenshot: (appid: string, game: string, path: string) =>
+    call<[string, string, string], VaultResult<{ path: string }>>("notes_add_screenshot", appid, game, path),
+  fileExists: (path: string) => call<[string], boolean>("file_exists", path),
 
   getSettings: () => call<[], Settings>("get_settings"),
   saveSettings: (settings: Settings) => call<[Settings], void>("save_settings", settings),

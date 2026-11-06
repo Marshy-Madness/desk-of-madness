@@ -18,6 +18,8 @@ from keyboard import Keyboard
 import reader
 import wiki
 import news
+import notesapp
+import notesvault
 import screenshot
 import scrolls
 import system
@@ -226,6 +228,62 @@ class Plugin:
         if text:
             storage.set_transcript(appid, file, text)
         return text
+
+    # Madness Notes desktop app (AppImage) on this Deck
+    async def find_notes_app(self):
+        return await asyncio.to_thread(notesapp.find)
+
+    async def file_exists(self, path: str):
+        return bool(path) and os.path.isfile(path)
+
+    async def prepare_notes_app(self, path: str):
+        """Marks the AppImage executable (downloads aren't), so Steam can start it."""
+        return os.path.isfile(path) and notesapp.make_executable(path)
+
+    async def notes_app_check(self, server: str, path: str):
+        return await asyncio.to_thread(notesapp.check, server, path)
+
+    async def notes_app_download(self, server: str):
+        return await asyncio.to_thread(notesapp.start_download, server)
+
+    async def notes_app_progress(self):
+        return notesapp.progress()
+
+    # Madness Notes vault (API token)
+    async def _vault_call(self, fn, *args):
+        try:
+            return {"ok": True, "data": await asyncio.to_thread(fn, storage.get_settings(), *args)}
+        except notesvault.VaultError as e:
+            return {"ok": False, "error": str(e)}
+
+    async def notes_vaults(self):
+        return await self._vault_call(notesvault.list_vaults)
+
+    async def notes_capture(self, appid: str, game: str, text: str):
+        return await self._vault_call(notesvault.capture, appid, game, text)
+
+    async def notes_game_note(self, appid: str, game: str, create: bool):
+        return await self._vault_call(notesvault.game_note, appid, game, create)
+
+    async def notes_related(self, appid: str, game: str):
+        return await self._vault_call(notesvault.related, appid, game)
+
+    async def notes_read_game(self, appid: str, game: str):
+        return await self._vault_call(notesvault.read_game, appid, game)
+
+    async def notes_append_game(self, appid: str, game: str, text: str, heading: str):
+        return await self._vault_call(notesvault.append_game, appid, game, text, heading)
+
+    async def notes_toggle_task(self, appid: str, game: str, line: int, done: bool):
+        return await self._vault_call(notesvault.toggle_task, appid, game, line, done)
+
+    async def notes_log_session(self, appid: str, game: str, minutes: int, left_off: str):
+        return await self._vault_call(notesvault.log_session, appid, game, minutes, left_off)
+
+    async def notes_add_screenshot(self, appid: str, game: str, path: str):
+        if not any(os.path.realpath(path).startswith(os.path.realpath(d) + os.sep) for d in storage._screenshot_dirs(appid)):
+            return {"ok": False, "error": "not a screenshot for this game"}
+        return await self._vault_call(notesvault.add_screenshot, appid, game, path)
 
     # settings
     async def get_settings(self):

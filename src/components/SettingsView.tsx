@@ -2,7 +2,7 @@ import { FC, useEffect, useState } from "react";
 import { ButtonItem, DialogButton, DropdownItem, Focusable, PanelSectionRow, TextField, ToggleField } from "@decky/ui";
 import { backend } from "../api/backend";
 import { emitDataChanged, loadSettings, updateSettings, useSettings } from "../state/notesStore";
-import { BackupStatus, BringForward, BrowserMode, DictateTarget, PadScroll, NotesIn, ReaderCacheSettings, VoiceFallback } from "../types";
+import { NotesVault, NotesAppCheck, NotesAppProgress, BackupStatus, BringForward, BrowserMode, DictateTarget, PadScroll, NotesIn, ReaderCacheSettings, VoiceFallback } from "../types";
 import { ComboRow, VoiceCommandList } from "./ComboSettings";
 import { refreshSpeech, useSpeechAllowed } from "../state/speech";
 import { LinkPanel } from "./Workshop";
@@ -13,6 +13,7 @@ import { useSeenButtons } from "../opening";
 import { formatDateTime } from "../utils/format";
 import { setSteamScreenshotPopup, steamScreenshotPopupOn } from "../utils/steamScreenshots";
 import { errText } from "../utils/errors";
+import { findNotesApp, openMadnessNotes } from "../madnessNotes";
 import { RadialItemsEditor } from "../radial/RadialSettings";
 import { OverlayTestRow } from "../radial/OverlayTestRow";
 import { TomeList } from "../tomes/TomePicker";
@@ -21,6 +22,7 @@ import * as s from "./styles";
 const DICTATE_TARGETS: { label: string; data: DictateTarget }[] = [
   { label: "Type it where I am", data: "type" },
   { label: "Save it as a note for this game", data: "note" },
+  { label: "Add it to my Madness Notes Deck Inbox", data: "vault" },
 ];
 
 const NOTES_IN: { label: string; data: NotesIn }[] = [
@@ -111,6 +113,77 @@ export const SettingsView: FC = () => {
   const [url, setUrl] = useState(settings.syncUrl ?? "");
   const [token, setToken] = useState(settings.syncToken ?? "");
   const [status, setStatus] = useState<BackupStatus | null>(null);
+  const [notesPath, setNotesPath] = useState(settings.notesAppPath ?? "");
+  const [notesMsg, setNotesMsg] = useState("");
+  const [appCheck, setAppCheck] = useState<NotesAppCheck | null>(null);
+  const [appDl, setAppDl] = useState<NotesAppProgress | null>(null);
+  const [appErr, setAppErr] = useState("");
+  const [vaults, setVaults] = useState<NotesVault[]>([]);
+  const [vaultMsg, setVaultMsg] = useState("");
+  const [notesToken, setNotesToken] = useState(settings.notesToken ?? "");
+
+  useEffect(() => {
+    if (appDl?.state !== "running") return;
+    const t = setInterval(async () => {
+      const p = await backend.notesAppProgress();
+      setAppDl(p);
+      if (p.state === "done") {
+        setNotesPath(p.path);
+        await updateSettings({ notesAppPath: p.path });
+        setAppCheck(null);
+      }
+    }, 1000);
+    return () => clearInterval(t);
+  }, [appDl?.state]);
+
+  const checkApp = async () => {
+    setAppErr("");
+    try {
+      const path = notesPath.trim() || (await findNotesApp());
+      setAppCheck(await backend.notesAppCheck(settings.notesServerUrl ?? "", path));
+    } catch (e) {
+      setAppErr(errText(e));
+    }
+  };
+  useEffect(() => {
+    if (settings.notesAppPath) checkApp();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const downloadApp = async () => {
+    setAppErr("");
+    try {
+      setAppDl(await backend.notesAppDownload(settings.notesServerUrl ?? ""));
+    } catch (e) {
+      setAppErr(errText(e));
+    }
+  };
+  const loadVaults = async () => {
+    setVaultMsg("Loading...");
+    await updateSettings({ notesToken: notesToken.trim() || undefined });
+    const r = await backend.notesVaults();
+    if (!r.ok) return setVaultMsg(r.error);
+    setVaults(r.data);
+    setVaultMsg(r.data.length ? "Pick a vault below." : "That account has no vaults of its own.");
+    if (r.data.length === 1) await updateSettings({ notesVaultId: r.data[0].id, notesVaultName: r.data[0].name });
+  };
+  const mb = (n: number) => `${Math.round(n / 1048576)} MB`;
+  const appStatus = appErr
+    ? appErr
+    : appDl?.state === "running"
+      ? `Downloading... ${mb(appDl.done)}${appDl.total ? ` of ${mb(appDl.total)}` : ""}`
+      : appDl?.state === "error"
+        ? appDl.error
+        : appDl?.state === "done"
+          ? "Downloaded and ready to open."
+          : appCheck
+            ? !appCheck.available
+              ? "The server has no Linux build published."
+              : appCheck.newer
+                ? appCheck.installed
+                  ? `Update available: ${appCheck.installed} to ${appCheck.latest}.`
+                  : `Version ${appCheck.latest} is available.`
+                : `Up to date (${appCheck.installed || appCheck.latest}).`
+            : "Checks the Madness Notes server for the newest Linux build.";
   const [bsUrl, setBsUrl] = useState(settings.bookstoreUrl ?? "https://workshop.marshymadness.com");
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -331,6 +404,114 @@ export const SettingsView: FC = () => {
               rgOptions={TEXT_SIZES}
               selectedOption={settings.readerTextSize ?? 17}
               onChange={(o) => updateSettings({ readerTextSize: o.data })}
+            />
+          </PanelSectionRow>
+
+          <Heading>Madness Notes app</Heading>
+          <PanelSectionRow>
+            <TextField
+              label="App file"
+              description="The Madness Notes .AppImage on this Deck. Left empty, it is looked for in Downloads, Applications and your home folder."
+              value={notesPath}
+              onChange={(e) => setNotesPath(e.target.value)}
+              onBlur={() => updateSettings({ notesAppPath: notesPath.trim() || undefined })}
+            />
+          </PanelSectionRow>
+          <PanelSectionRow>
+            <ButtonItem
+              layout="below"
+              description={notesMsg || "Opens the full app (every vault, offline) through a Steam shortcut."}
+              onClick={async () => {
+                const found = notesPath.trim() ? notesPath.trim() : await findNotesApp();
+                if (found) setNotesPath(found);
+                setNotesMsg((await openMadnessNotes()) || "Starting Madness Notes...");
+              }}
+            >
+              Open Madness Notes
+            </ButtonItem>
+          </PanelSectionRow>
+
+          <PanelSectionRow>
+            <TextField
+              label="Notes server"
+              description="Where builds are downloaded from. Empty uses https://notes.marshymadness.com."
+              value={settings.notesServerUrl ?? ""}
+              onChange={(e) => updateSettings({ notesServerUrl: e.target.value.trim() || undefined })}
+            />
+          </PanelSectionRow>
+          <PanelSectionRow>
+            <ButtonItem
+              layout="below"
+              description={appStatus}
+              disabled={appDl?.state === "running"}
+              onClick={appCheck?.newer || !(notesPath.trim() || settings.notesAppPath) ? downloadApp : checkApp}
+            >
+              {appCheck?.newer
+                ? appCheck.installed
+                  ? "Update Madness Notes"
+                  : "Download Madness Notes"
+                : notesPath.trim() || settings.notesAppPath
+                  ? "Check for update"
+                  : "Download Madness Notes"}
+            </ButtonItem>
+          </PanelSectionRow>
+
+          <PanelSectionRow>
+            <TextField
+              label="API token"
+              description="In Madness Notes: Settings, API tokens, create one. Lets Desk add quick notes and game notes to your vault."
+              value={notesToken}
+              onChange={(e) => setNotesToken(e.target.value)}
+              onBlur={() => updateSettings({ notesToken: notesToken.trim() || undefined })}
+              bIsPassword
+            />
+          </PanelSectionRow>
+          <PanelSectionRow>
+            <ButtonItem
+              layout="below"
+              description={vaultMsg || (settings.notesVaultName ? `Using the vault "${settings.notesVaultName}".` : "Loads the vaults this token can use.")}
+              disabled={!notesToken.trim()}
+              onClick={loadVaults}
+            >
+              Load my vaults
+            </ButtonItem>
+          </PanelSectionRow>
+          {vaults.length > 1 && (
+            <PanelSectionRow>
+              <DropdownItem
+                label="Vault for quick notes"
+                rgOptions={vaults.map((v) => ({ label: v.name, data: v.id }))}
+                selectedOption={settings.notesVaultId}
+                onChange={(o) => updateSettings({ notesVaultId: o.data, notesVaultName: vaults.find((v) => v.id === o.data)?.name })}
+              />
+            </PanelSectionRow>
+          )}
+          <PanelSectionRow>
+            <ToggleField
+              label="Log play sessions to the game's note"
+              description="When a game closes, add the date, minutes played and where you left off under Play log."
+              checked={settings.notesSessionLog ?? false}
+              onChange={(v) => updateSettings({ notesSessionLog: v })}
+            />
+          </PanelSectionRow>
+          <PanelSectionRow>
+            <ToggleField
+              label="Send screenshots to the game's note"
+              description="Screenshots you add to a note are also uploaded to the vault and embedded in the game's note."
+              checked={settings.notesScreenshots ?? false}
+              onChange={(v) => updateSettings({ notesScreenshots: v })}
+            />
+          </PanelSectionRow>
+          <PanelSectionRow>
+            <ToggleField
+              label="Hide the Madness Notes shortcut"
+              description="Keep it out of your Steam library; it still opens from Desk of Madness."
+              checked={settings.notesHideShortcut ?? false}
+              onChange={(v) => {
+                updateSettings({ notesHideShortcut: v });
+                const id = settings.notesShortcutId;
+                if (id) (window as any).SteamClient?.Apps?.SetAppHidden?.(id, v);
+              }}
             />
           </PanelSectionRow>
 
